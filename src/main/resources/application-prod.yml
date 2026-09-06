@@ -1,0 +1,32 @@
+# ============================================================
+# prod: Render 等のクラウド環境。値はすべて環境変数から。
+# シークレット(DB 認証情報, JWT 秘密鍵)をリポジトリに置かない。
+# Sprint 4 で Render の設定と合わせて仕上げる。
+# ============================================================
+spring:
+  datasource:
+    # LEARN: Render の Managed PostgreSQL は接続情報を個別の環境変数で渡すのが素直。
+    # JDBC URL 形式(jdbc:postgresql://host:5432/db)で SPRING_DATASOURCE_URL を与える。
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  docker:
+    compose:
+      enabled: false
+  jpa:
+    show-sql: false
+  flyway:
+    # 本番では baseline を明示。既存 DB にも安全に適用できる。
+    baseline-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # コンテナ/ロードバランサからのヘルスチェック用に liveness/readiness を出す。
+      probes:
+        enabled: true
+      show-details: never

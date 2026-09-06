@@ -120,7 +120,7 @@
 - Maven プロジェクト（Spring Initializr 相当）。依存: Web, Data JPA, Validation, Actuator, PostgreSQL Driver, Flyway, `spring-boot-docker-compose`, springdoc-openapi, Testcontainers, Spring Security（設定は最小）
 - `compose.yaml`（PostgreSQL 16）
 - `application.yml` ＋ プロファイル `local` / `test` / `prod`（値は環境変数参照）
-- Flyway 初期マイグレーション（`V1__init.sql`、まず空か `flyway_schema_history` のみ）
+- Flyway の置き場（`src/main/resources/db/migration/`）だけ用意。マイグレーション本体は Sprint 1 から
 - `Dockerfile`（multi-stage: build → 実行イメージ）
 - GitHub Actions（`.github/workflows/ci.yml`）: `./mvnw verify`
 - Spotless / Checkstyle / ArchUnit の依存とルール雛形（ArchUnit は最初は緩く）
@@ -135,11 +135,11 @@
 - [ ] GitHub Actions の CI が push でグリーン
 - [ ] `docker build .` が成功し、生成イメージが起動する
 
-**Sprint 0 で確定する未決事項**:
-- Spring Boot の具体バージョン（安定最新。3.5 系か 4.0 系か）と Java バージョン整合
-- ルートパッケージ名（`com.example.taskapi` 仮）
-- Checkstyle / Spotless のルールセット
-- ADR 化: `0001-claude-workflow` / `0002-build-tool-maven` / `0003-db-postgres-docker` / `0004-package-by-feature`
+**Sprint 0 で確定した事項**:
+- Spring Boot **4.0.8** / Java 21（3.5 系はサポート切れで Initializr 生成不可だったため 4 系へ。[ADR 0002](adr/0002-language-build-framework.md)）
+- ルートパッケージ **`com.example.taskapi`**
+- フォーマットは Spotless（google-java-format）、規約は Checkstyle 最小構成（`config/checkstyle/checkstyle.xml`）
+- ADR: [0001](adr/0001-claude-workflow.md) / [0002](adr/0002-language-build-framework.md) / [0003](adr/0003-postgres-with-docker-compose.md) / [0004](adr/0004-package-by-feature-and-guardrails.md)
 
 学習ポイント: プロジェクト構造、依存管理、プロファイル、Flyway、Docker multi-stage、CI パイプライン、Actuator。
 
@@ -149,7 +149,7 @@
 **目的**: User / Category / Task の CRUD をひと通り。認証はまだ入れず、「固定の owner（seed した 1 ユーザー）」前提で実装する。Sprint 2 でリクエストユーザーに差し替える。
 
 含むもの:
-- 3 エンティティ ＋ Flyway マイグレーション（`V2__create_user_category_task.sql`）
+- 3 エンティティ ＋ Flyway マイグレーション（`V1__create_user_category_task.sql`。Sprint 0 は migration 0 本）
 - JPA Auditing 設定（`@EnableJpaAuditing`、`@CreatedDate` / `@LastModifiedDate`）
 - `common`: `ResourceNotFoundException`, `DuplicateResourceException`, `BusinessRuleException`, `GlobalExceptionHandler`（`@RestControllerAdvice` → ProblemDetail）
 - Category: entity/repository/dto/mapper/service/controller（**ゴールデンパスのお手本**）
@@ -241,6 +241,10 @@
 学習ポイント: プロファイル分離、シークレット管理、コンテナデプロイ、マネージド DB、CD、スモークテスト。
 
 ---
+
+### 残る未決（Sprint 4 前に再確認）
+
+- Render 無料枠の最新仕様（無料 PostgreSQL の保持期間・Web Service のスリープ挙動）
 
 ## 4. 全スプリント横断の受け入れ基準
 

@@ -1,0 +1,72 @@
+# 全プロファイル共通の設定。プロファイル固有は下部の "---" で区切ったドキュメント、
+# または application-<profile>.yml に置く。
+spring:
+  application:
+    name: taskapi
+  profiles:
+    # LEARN: 起動時に -Dspring.profiles.active=... が無ければ local を使う。
+    # test プロファイルは @ActiveProfiles("test") でテストが明示的に有効化する。
+    default: local
+  jpa:
+    hibernate:
+      # LEARN: スキーマは Flyway が唯一の正。Hibernate には検証だけさせ、
+      # エンティティとテーブルの不一致を起動時に検出する。
+      ddl-auto: validate
+    # LEARN: open-in-view を切ると、遅延ロードは必ずトランザクション境界(=Service層)で
+    # 完結させる必要がある。N+1 やビュー層での遅延ロードを設計段階で防げる。
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Sprint 0 では health と info のみ公開。必要になったら足す。
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    # LEARN: タグ(コントローラ)とオペレーションを名前順に並べると差分が安定する。
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+---
+# ============================================================
+# local: 開発機。spring-boot-docker-compose が compose.yaml の
+# PostgreSQL を自動起動し、datasource を自動で結線する。
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: local
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start-and-stop
+      file: compose.yaml
+  jpa:
+    show-sql: true
+
+---
+# ============================================================
+# test: Testcontainers が PostgreSQL を提供する(@ServiceConnection)。
+# docker-compose 連携は切る。
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: test
+  docker:
+    compose:
+      enabled: false

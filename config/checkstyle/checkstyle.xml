@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  最小構成。フォーマット(インデント・改行・import 順)は Spotless(google-java-format)が担当するので、
+  ここではフォーマットで拾えない規約だけを見る。Sprint 3 で強度を上げる。
+-->
+<module name="Checker">
+  <property name="severity" value="warning"/>
+  <property name="fileExtensions" value="java"/>
+
+  <module name="TreeWalker">
+    <!-- ワイルドカード import 禁止(何が入ってくるか不透明になる) -->
+    <module name="AvoidStarImport"/>
+    <!-- 使われていない import -->
+    <module name="UnusedImports">
+      <property name="processJavadoc" value="true"/>
+    </module>
+    <!-- 冗長な import(java.lang / 同一パッケージ / 重複) -->
+    <module name="RedundantImport"/>
+
+    <!-- 命名規約 -->
+    <module name="TypeName"/>
+    <module name="MethodName"/>
+    <module name="ConstantName">
+      <!-- 定数は UPPER_SNAKE。ただし ArchUnit の `static final ArchRule` は
+           lower_snake の説明的な名前が慣習なので、それも許可する。 -->
+      <property name="format"
+                value="^(log(ger)?|[A-Z][A-Z0-9]*(_[A-Z0-9]+)*|[a-z][a-z0-9]*(_[a-z0-9]+)*)$"/>
+    </module>
+    <module name="PackageName"/>
+
+    <!-- 明白なバグの温床 -->
+    <module name="EqualsHashCode"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="StringLiteralEquality"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="FallThrough"/>
+    <module name="EmptyStatement"/>
+    <module name="OneStatementPerLine"/>
+
+    <!-- ブロックは必ず波括弧で(if/else/for/while) -->
+    <module name="NeedBraces"/>
+  </module>
+</module>

@@ -22,11 +22,33 @@ Spring Boot による API の基本を、**環境構築からクラウドデプ�
 - [x] 壁打ち完了 — [docs/brainstorm.md](docs/brainstorm.md)（2026-09-06 承認）
 - [x] プロジェクト `CLAUDE.md` 作成 — 規約・不変条件・ゴールデンパス
 - [x] 仕様・スプリント計画 — [docs/spec.md](docs/spec.md)
-- [ ] **Sprint 0: 環境構築**（← 次はここ）
-- [ ] Sprint 1: ドメインと CRUD
+- [x] **Sprint 0: 環境構築** — [docs/progress.md](docs/progress.md) / [docs/learning/sprint-0.md](docs/learning/sprint-0.md)
+- [ ] **Sprint 1: ドメインと CRUD**（← 次はここ）
 - [ ] Sprint 2: 認証・認可
 - [ ] Sprint 3: 一覧の高度化と品質
 - [ ] Sprint 4: デプロイ
+
+## 開発環境
+
+前提: Java 21 (Temurin)、Docker Desktop。
+
+```bash
+# 起動（compose の PostgreSQL は spring-boot-docker-compose が自動起動）
+./mvnw spring-boot:run
+# → http://localhost:8080/actuator/health  /  http://localhost:8080/swagger-ui.html
+
+# ビルド + 全チェック（テスト / Spotless / Checkstyle / ArchUnit）
+./mvnw verify
+
+# フォーマット自動整形
+./mvnw spotless:apply
+
+# コンテナ
+docker build -t taskapi:local .
+```
+
+- DB は `compose.yaml`（PostgreSQL 16、ホスト側ポート **5433**）。直接つなぐ: `psql -h localhost -p 5433 -U taskapi -d taskapi`
+- スタック: Java 21 / Spring Boot 4.0.8 / Maven（バージョン経緯は [ADR 0002](docs/adr/0002-language-build-framework.md)）
 
 ## ドキュメント
 

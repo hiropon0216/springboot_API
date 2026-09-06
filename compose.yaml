@@ -1,0 +1,25 @@
+# LEARN: spring-boot-docker-compose がこのファイルを検出し、`./mvnw spring-boot:run`
+# 実行時に PostgreSQL を自動起動して datasource を結線する。手動なら `docker compose up -d`。
+services:
+  postgres:
+    image: 'postgres:16'
+    environment:
+      POSTGRES_DB: taskapi
+      POSTGRES_USER: taskapi
+      POSTGRES_PASSWORD: taskapi
+    ports:
+      # LEARN: ホスト側は 5433。既定の 5432 は他プロジェクトの PostgreSQL と衝突しやすいので
+      # ずらしてある。spring-boot-docker-compose はコンテナのポートマッピングを自動で読み取って
+      # datasource に結線するので、アプリ側で URL を書く必要はない。
+      # psql で直接つなぐとき: psql -h localhost -p 5433 -U taskapi -d taskapi
+      - '5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U taskapi -d taskapi']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - taskapi_pgdata:/var/lib/postgresql/data
+
+volumes:
+  taskapi_pgdata:
