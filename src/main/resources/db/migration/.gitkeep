@@ -1,4 +1,0 @@
-# Flyway マイグレーション置き場。命名規約: V<番号>__<スネークケース説明>.sql
-# 例: V1__create_user_category_task.sql
-# repeatable(local のシード等)は R__<説明>.sql
-# 最初のマイグレーションは Sprint 1 で追加する。

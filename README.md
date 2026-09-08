@@ -23,8 +23,8 @@ Spring Boot による API の基本を、**環境構築からクラウドデプ�
 - [x] プロジェクト `CLAUDE.md` 作成 — 規約・不変条件・ゴールデンパス
 - [x] 仕様・スプリント計画 — [docs/spec.md](docs/spec.md)
 - [x] **Sprint 0: 環境構築** — [docs/progress.md](docs/progress.md) / [docs/learning/sprint-0.md](docs/learning/sprint-0.md)
-- [ ] **Sprint 1: ドメインと CRUD**（← 次はここ）
-- [ ] Sprint 2: 認証・認可
+- [x] **Sprint 1: ドメインと CRUD** — User/Category/Task、CRUD、ProblemDetail、テスト一式。[feedback](docs/feedback/sprint-1.md) / [learning](docs/learning/sprint-1.md)
+- [ ] **Sprint 2: 認証・認可**（← 次はここ）
 - [ ] Sprint 3: 一覧の高度化と品質
 - [ ] Sprint 4: デプロイ
 
@@ -57,6 +57,21 @@ docker build -t taskapi:local .
 | `docs/brainstorm.md` | 設計合意・不採用案・未決事項 |
 | `docs/spec.md` | 機能一覧・スプリント計画・受け入れ基準 |
 | `docs/adr/` | 軽量 ADR（1 ファイル 1 決定）|
-| `docs/learning/` | スプリントごとの学習ノート・用語・復習問 |
+| `docs/learning/` | スプリントごとの学習ノート・用語・復習問（`review-deck.md` は復習 Q&A の累積）|
+| `docs/glossary.md` | 累積用語集 |
 | `docs/progress.md` | 実装進捗（Claude が generator 役で更新）|
 | `docs/feedback/` | スプリントの合否とバグ一覧（Claude が evaluator 役で作成）|
+
+## API（Sprint 1 時点）
+
+`/api/v1` 配下。認証は Sprint 2 で追加（現在は全許可）。
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET / POST | `/categories` | 一覧 / 作成 |
+| GET / PUT / DELETE | `/categories/{id}` | 取得 / 更新 / 削除 |
+| GET / POST | `/tasks` | 一覧（ページングは Sprint 3）/ 作成 |
+| GET / PUT / DELETE | `/tasks/{id}` | 取得 / 更新 / 削除 |
+| PATCH | `/tasks/{id}/status` | ステータス変更（DONE で completedAt 記録）|
+
+エラーは RFC 7807 `ProblemDetail`。バリデーション 400 / not found 404 / 名前重複 409 / 業務ルール違反 422。

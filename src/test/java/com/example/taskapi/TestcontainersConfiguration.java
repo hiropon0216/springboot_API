@@ -13,7 +13,7 @@ import org.testcontainers.utility.DockerImageName;
  * に結線する(URL/user/password を書かなくてよい)。本番と同じ PostgreSQL 16 で テストするので、H2 との方言差でハマらない。
  */
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
   @Bean
   @ServiceConnection

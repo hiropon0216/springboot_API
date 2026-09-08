@@ -21,4 +21,25 @@
 - **multi-stage Dockerfile** — ビルド用と実行用のステージを分けて実行イメージを小さくする手法。
 - **layered jar** — Boot の fat jar を変化頻度別の層に分解し Docker レイヤキャッシュを効かせる仕組み。
 - **`open-in-view`** — リクエスト処理全体で EntityManager を開いたままにするか（本プロジェクトは false）。
-- **RFC 7807 / `ProblemDetail`** — HTTP エラー応答の標準形式（Sprint 1 で導入予定）。
+- **RFC 7807 / `ProblemDetail`** — HTTP エラー応答の標準形式（`type`/`title`/`status`/`detail` ＋ 拡張）。
+
+## Sprint 1
+
+- **`@Entity` / `@Table` / `@Column`** — クラス/フィールドを DB テーブル/列に対応づける JPA アノテーション。
+- **`@MappedSuperclass`** — テーブルにならず継承先に列定義だけを配る親クラス。
+- **JPA Auditing** — `@CreatedDate`/`@LastModifiedDate` で保存・更新時刻を自動セット。
+- **`@ManyToOne(fetch = LAZY)`** — 多対一関連。必要になるまで読み込まない。
+- **`@Enumerated(EnumType.STRING)`** — enum を名前で永続化（序数でなく）。
+- **`@OnDelete(SET_NULL)`** — Hibernate 生成 FK に `on delete set null` を付ける。
+- **DTO（record）** — API 入出力の器。エンティティを直接公開しない。Create/Update/Response で分ける。
+- **マッパー** — DTO ↔ エンティティ変換を集約するクラス（Sprint 1 は手書き）。
+- **Bean Validation** — `@NotBlank`/`@Size`/`@Pattern`/`@NotNull`。Controller の `@Valid` で発火。
+- **`@RestControllerAdvice`** — 例外を横断的に捕捉して応答へ変換。
+- **`ResponseEntityExceptionHandler`** — 標準例外の ProblemDetail 化を再利用できる基底クラス。
+- **`@Transactional(readOnly = true)`** — 読み取り専用トランザクション。書き込みメソッドで上書き。
+- **Spring Data クエリメソッド** — メソッド名からクエリを自動生成（`findByOwnerIdOrderByNameAsc` 等）。
+- **`@DataJpaTest`** — Repository/JPA だけの軽いスライステスト。
+- **`@WebMvcTest` / `@MockitoBean`** — web 層だけをロードし依存をモック。
+- **`@Testcontainers(disabledWithoutDocker = true)`** — Docker が無ければスキップ（失敗にしない）。
+- **L1 キャッシュ（永続化コンテキスト）** — 同一トランザクション内で同じ ID は同一インスタンス。`em.clear()` で追い出す。
+- **`CurrentUserProvider`** — 「現在のリクエストユーザー」を返す抽象。Sprint 1 は固定実装、Sprint 2 で認証ベースに差し替え。

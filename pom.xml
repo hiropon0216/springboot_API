@@ -133,6 +133,15 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- LEARN: H2 は "Docker 無しで全レイヤを通す" スモークテスト専用。本番・通常テストは
+		     PostgreSQL(Testcontainers)。H2 は PostgreSQL 互換モードで使うが方言差はゼロではないので
+		     常用しない。 -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- LEARN: ArchUnit は「層の依存方向」をテストとして固定する。
 		     人にも Claude にもアーキテクチャ違反を CI で気づかせる仕掛け。 -->
 		<dependency>
@@ -202,6 +211,7 @@
 				</dependencies>
 				<configuration>
 					<configLocation>config/checkstyle/checkstyle.xml</configLocation>
+					<suppressionsLocation>config/checkstyle/suppressions.xml</suppressionsLocation>
 					<includeTestSourceDirectory>true</includeTestSourceDirectory>
 					<violationSeverity>warning</violationSeverity>
 					<failOnViolation>true</failOnViolation>

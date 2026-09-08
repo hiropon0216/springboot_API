@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+  <!-- LEARN: テストメソッド名は日本語で「何を確認するか」を書く方が読みやすい。
+       本番コードの命名規約(MethodName)はテストには適用しない。 -->
+  <suppress files="[/\\]src[/\\]test[/\\]" checks="MethodName"/>
+</suppressions>

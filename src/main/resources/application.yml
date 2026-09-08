@@ -55,6 +55,10 @@ spring:
       enabled: true
       lifecycle-management: start-and-stop
       file: compose.yaml
+  flyway:
+    # LEARN: local だけ seed 用のロケーションを足す。プロファイル別ドキュメントは
+    # リストをマージせず「置き換える」ので、db/migration も明示的に含める。
+    locations: classpath:db/migration,classpath:db/seed
   jpa:
     show-sql: true
 
