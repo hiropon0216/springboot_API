@@ -33,3 +33,20 @@ jobs:
           name: test-reports
           path: '**/target/surefire-reports/*.xml'
           if-no-files-found: ignore
+
+  # LEARN: deploy ジョブは main ブランチへの push 時のみ実行。
+  # PR マージ後に自動デプロイする CD(Continuous Deployment)パイプライン。
+  # build ジョブが成功した場合のみ実行される(needs: build)。
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # LEARN: if 条件で「main への push」かつ「PR ではない直接 push」のときだけ実行。
+    # PR のマージは main への push として扱われるため、マージ時に自動デプロイされる。
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deploy to Render
+        # LEARN: Render のデプロイフックは curl で POST するだけ。
+        # フックURL は GitHub Secrets に RENDER_DEPLOY_HOOK_URL として登録する。
+        # Render ダッシュボード → サービス → Settings → Deploy Hook で取得できる。
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

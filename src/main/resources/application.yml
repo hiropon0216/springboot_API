@@ -32,6 +32,13 @@ management:
     health:
       show-details: when-authorized
 
+app:
+  jwt:
+    # LEARN: 開発用の固定キー。本番は環境変数 APP_JWT_SECRET から注入する（application-prod.yml 参照）。
+    # HMAC-SHA256 には 256 bit (32 bytes) 以上が必要。ここは学習用の固定値。
+    secret: dev-local-jwt-secret-key-must-be-at-least-256-bits-long-so-pad-it-here
+    expires-in-seconds: 3600
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

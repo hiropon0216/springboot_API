@@ -20,6 +20,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,13 +31,28 @@ import org.springframework.test.web.servlet.MockMvc;
  *
  * <p>LEARN: {@code @WebMvcTest} は web 層(Controller + {@code @RestControllerAdvice} + Jackson +
  * バリデーション)だけをロードする。Service や DB は出てこないので速い。エラー整形(ProblemDetail)が ちゃんと効くかもここで見る。
+ *
+ * <p>LEARN: Sprint 2 から SecurityConfig が JWT を要求するので、{@code @WithMockUser} で SecurityContext
+ * にユーザーをセットして認証済み状態を偽装する。Service はモックなので {@code CurrentUserProvider} は動かない。JwtDecoder は Bean
+ * として必要なため {@code @MockitoBean} で差し替える。
  */
 @WebMvcTest(CategoryController.class)
 @Import(SecurityConfig.class)
+@WithMockUser // LEARN: クラスレベルで付けると全テストメソッドに適用。認証済みユーザーとして扱われる。
+@TestPropertySource(
+    properties = {
+      // LEARN: @WebMvcTest は application.yml を読まないので JWT 設定を直接指定する。
+      "app.jwt.secret=test-secret-key-must-be-at-least-256-bits-long-so-we-pad-it-here",
+      "app.jwt.expires-in-seconds=3600"
+    })
 class CategoryControllerTest {
 
   @Autowired MockMvc mvc;
   @MockitoBean CategoryService service;
+
+  // LEARN: @WebMvcTest では JwtDecoder が application context に登録されていないため、
+  // MockitoBean で差し替える。実際のトークン検証は行わず、@WithMockUser の認証情報を使う。
+  @MockitoBean JwtDecoder jwtDecoder;
 
   @Test
   void 作成成功は201とLocationヘッダ() throws Exception {
@@ -97,5 +115,17 @@ class CategoryControllerTest {
   @Test
   void 削除は204() throws Exception {
     mvc.perform(delete("/api/v1/categories/3")).andExpect(status().isNoContent());
+  }
+
+  /**
+   * Sprint 2 受け入れ基準: トークンなしで保護エンドポイントを呼ぶと 401。
+   *
+   * <p>LEARN: {@code @WithMockUser} はクラスレベルに付いているが、{@code @WithAnonymousUser} を
+   * メソッドレベルに付けると匿名ユーザーでのリクエストを模倣できる。oauth2ResourceServer フィルターが Authorization ヘッダを見つけられず 401 を返す。
+   */
+  @Test
+  @org.springframework.security.test.context.support.WithAnonymousUser
+  void 認証なしのアクセスは401() throws Exception {
+    mvc.perform(get("/api/v1/categories")).andExpect(status().isUnauthorized());
   }
 }

@@ -24,6 +24,9 @@
 		<spotless.version>2.44.5</spotless.version>
 		<checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
 		<checkstyle.version>10.21.4</checkstyle.version>
+		<!-- LEARN: MapStruct のバージョンはプラグインの annotationProcessorPaths でも参照する。
+		     ここで1箇所管理することでズレを防ぐ。-->
+		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
 
 	<dependencies>
@@ -43,6 +46,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -150,6 +157,16 @@
 			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- LEARN: MapStruct はアノテーションプロセッサによりコンパイル時にマッパー実装を自動生成する。
+		     実行時に何も要らない(コード生成済み)ので scope は compile のままでよい。
+		     手書きマッパー(CategoryMapper)と比較: 定型コードが激減するが、マッピングルールが
+		     @Mapping アノテーションに散らばり読みにくくなる面もある。ADR 0005 に記録。-->
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -164,9 +181,19 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
 					<annotationProcessorPaths>
+						<!-- LEARN: Lombok は MapStruct より先に並べる。
+						     MapStruct が Lombok 生成のメソッド(getter/setter)を読む必要があるため、
+						     処理順序が重要。Lombok → MapStruct の順でアノテーション処理される。-->
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
+						</path>
+						<!-- LEARN: mapstruct-processor がコンパイル時に @Mapper インターフェースを
+						     スキャンし、XxxMapperImpl クラスを生成する。生成コードは target/ 配下に出力される。-->
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>${mapstruct.version}</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

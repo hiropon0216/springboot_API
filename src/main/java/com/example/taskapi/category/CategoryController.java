@@ -3,6 +3,9 @@ package com.example.taskapi.category;
 import com.example.taskapi.category.dto.CategoryCreateRequest;
 import com.example.taskapi.category.dto.CategoryResponse;
 import com.example.taskapi.category.dto.CategoryUpdateRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/categories")
+@Tag(name = "Category", description = "カテゴリの CRUD")
 public class CategoryController {
 
   private final CategoryService service;
@@ -33,16 +37,23 @@ public class CategoryController {
   }
 
   @GetMapping
+  @Operation(summary = "カテゴリ一覧")
   public List<CategoryResponse> list() {
     return service.list();
   }
 
   @GetMapping("/{id}")
+  @Operation(summary = "カテゴリ単一取得")
+  @ApiResponse(responseCode = "200", description = "カテゴリを返す")
+  @ApiResponse(responseCode = "404", description = "カテゴリが見つからない")
   public CategoryResponse get(@PathVariable Long id) {
     return service.get(id);
   }
 
   @PostMapping
+  @Operation(summary = "カテゴリ作成")
+  @ApiResponse(responseCode = "201", description = "作成されたカテゴリを返す")
+  @ApiResponse(responseCode = "409", description = "同名カテゴリが既に存在する")
   public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryCreateRequest req) {
     CategoryResponse created = service.create(req);
     // LEARN: 作成は 201 Created + Location ヘッダに新リソースの URI を返すのが REST の作法。
@@ -50,12 +61,15 @@ public class CategoryController {
   }
 
   @PutMapping("/{id}")
+  @Operation(summary = "カテゴリ更新")
   public CategoryResponse update(
       @PathVariable Long id, @Valid @RequestBody CategoryUpdateRequest req) {
     return service.update(id, req);
   }
 
   @DeleteMapping("/{id}")
+  @Operation(summary = "カテゴリ削除", description = "紐づく Task の category_id は NULL になる")
+  @ApiResponse(responseCode = "204", description = "削除成功")
   public ResponseEntity<Void> delete(@PathVariable Long id) {
     service.delete(id);
     return ResponseEntity.noContent().build();

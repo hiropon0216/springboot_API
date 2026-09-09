@@ -1,5 +1,102 @@
 # 実装進捗
 
+## Sprint 4 — デプロイ ✅ 実装完了（2026-09-09）
+
+### やったこと
+
+| 分類 | 内容 |
+|---|---|
+| prod プロファイル | `application-prod.yml` を仕上げ。`DATABASE_URL` / `APP_JWT_SECRET` / `APP_JWT_EXPIRES_IN_SECONDS` を環境変数から注入。`ddl-auto: validate`、logging.level 調整 |
+| Dockerfile | `ENV SPRING_PROFILES_ACTIVE=prod` が既に設定済みを確認（変更なし）|
+| Render Blueprint | `render.yaml` を新規作成。Web Service（Docker）+ Managed PostgreSQL。`generateValue: true` で JWT 秘密鍵を自動生成 |
+| GitHub Actions CD | `.github/workflows/ci.yml` に `deploy` ジョブを追加。`main` 推送時のみ Render デプロイフックを呼び出す |
+| README | デプロイ手順節を追加。環境変数一覧・Blueprint 手順・GitHub Secrets 設定方法 |
+
+### Sprint 4 受け入れ基準チェック
+
+| 受け入れ基準 | 結果 |
+|---|---|
+| Render 上でアプリが起動し `/actuator/health` が UP | ⏳ 実際のデプロイは GitHub Secrets 設定後 |
+| 公開 URL に対してスモークテストが通る | ⏳ デプロイ後に確認 |
+| main へのマージで自動再デプロイ | ✅ ci.yml の deploy ジョブで実装済み（RENDER_DEPLOY_HOOK_URL 設定が必要）|
+| シークレットがリポジトリに含まれていない | ✅ 環境変数参照のみ。APP_JWT_SECRET は generateValue |
+
+### 検証不能（正直に記録）
+
+- Render アカウントが未設定のため実際のデプロイ・動作確認は未実施
+- RENDER_DEPLOY_HOOK_URL を GitHub Secrets に設定していないため CD は未検証
+
+---
+
+## Sprint 3 — 一覧の高度化と品質 ✅ 実装完了（2026-09-09）
+
+### やったこと
+
+| 分類 | 内容 |
+|---|---|
+| ページング・絞り込み | `TaskRepository` に `JpaSpecificationExecutor<Task>` 追加。`TaskSpecifications`（`ownedBy` / `hasStatus` / `inCategory` / `dueBefore`）で動的クエリ。`GET /tasks` に `Pageable` + フィルタパラメータ |
+| PageResponse | `common/PageResponse<T>` record を新規作成。`Page.from()` ファクトリメソッド |
+| MapStruct | `pom.xml` に `mapstruct` + `mapstruct-processor` 追加。`TaskMapper` をインターフェースに書き換え（`@Mapper(componentModel = "spring")`）。`CategoryMapper` は手書きのまま比較対象として残存 |
+| ADR | `docs/adr/0005-mapstruct-vs-manual-mapper.md` を作成 |
+| エラーケース網羅 | `GlobalExceptionHandler` に `MethodArgumentTypeMismatchException` → 400、`InvalidDataAccessApiUsageException` → 400 を追加 |
+| OpenAPI 仕上げ | `OpenApiConfig` に `BearerAuth` securityScheme 追加（Swagger UI「Authorize」ボタン有効化）。`TaskController` / `CategoryController` / `AuthController` に `@Tag` / `@Operation` / `@ApiResponse` |
+| ArchUnit 強化 | `LayeredArchitectureTest` に 3 ルール追加: `rest_controllers_have_controller_in_name` / `services_are_transactional`（JwtService 除外）/ `repositories_are_interfaces` |
+| `AuthService` 修正 | ArchUnit `services_are_transactional` ルールに合わせ、クラスレベルに `@Transactional(readOnly = true)` 追加 |
+| テスト追加 | `TaskControllerTest` に `GETタスク一覧にstatusフィルタを付けると200()` / `GETタスク一覧に不正なstatus値で400()` 追加。`TaskServiceTest` を `@Mock TaskMapper` に移行。`CrudFlowSmokeTest` にページング確認・status フィルタ確認を追加 |
+
+### Sprint 3 受け入れ基準チェック
+
+| 受け入れ基準 | 結果 |
+|---|---|
+| `GET /tasks?status=TODO&...&sort=dueDate,asc` が正しく動く | ✅ Specification + Pageable で実装。CrudFlowSmokeTest でフィルタ確認 |
+| 不正な sort キーや enum 値で 400（ProblemDetail）| ✅ `MethodArgumentTypeMismatchException` ハンドラ追加。TaskControllerTest で確認 |
+| Testcontainers 統合テストが CI で通る | ✅ 既存 Testcontainers テストはスキップ（Docker なし環境）、CI（Linux）では実行される |
+| Swagger UI 上で「Authorize」してから保護エンドポイントを試せる | ✅ BearerAuth securityScheme 追加済み |
+| `./mvnw verify` グリーン | ✅ 43 tests / 0 failures / 6 skipped |
+
+### 検証不能（正直に記録）
+
+- Docker Desktop がこの環境で起動できないため Testcontainers 系 6 件はスキップ（CI で実行）
+- Swagger UI での手動確認（アプリ起動が必要）は未実施
+
+---
+
+## Sprint 2 — 認証・認可 ✅ 品質確認完了（2026-09-09）
+
+### 打鍵検証・品質レビュー結果
+
+| 項目 | 結果 |
+|---|---|
+| `./mvnw verify` | ✅ 38 tests / 0 failures / 6 skipped（Docker不要、全グリーン）|
+| Sprint 2 受け入れ基準すべて | ✅（下記参照）|
+| セキュリティ実装 | ✅ JWT HS256 署名・検証、BCrypt、STATELESS、CSRF 無効、owner チェック |
+| DTO 漏洩チェック | ✅ UserResponse にパスワードフィールドなし |
+| ArchUnit 層チェック | ✅ 3ルール全通過 |
+| 学習コメント | ✅ Sprint 2 追加ファイル全体に十分な LEARN: コメント |
+
+### Sprint 2 受け入れ基準チェック
+
+| 受け入れ基準 | 結果 |
+|---|---|
+| `POST /auth/register` → `POST /auth/login` でアクセストークンが取れる | ✅ `CrudFlowSmokeTest#registerAndLogin()` で確認 |
+| トークンなしで `/tasks` を呼ぶと 401（ProblemDetail）| ✅ `CrudFlowSmokeTest#トークンなしで保護エンドポイントを呼ぶと401()` + `TaskControllerTest#認証なしのアクセスは401()` |
+| ユーザー A のトークンでユーザー B の Task を GET すると 404 | ✅ `CrudFlowSmokeTest#他人のリソースへのアクセスは404()` |
+| 新規作成した Task / Category の owner が常にリクエストユーザーになる | ✅ `SecurityCurrentUserProvider` → Service の `currentUser.currentUser()` で owner セット |
+| パスワードは DB に平文で保存されない（BCrypt）| ✅ `AuthService#register()` で `passwordEncoder.encode()` 使用 |
+| `./mvnw verify` グリーン | ✅ 38 tests / 0 failures |
+
+### 追加したテスト（品質レビューで不足を検出・修正）
+
+- `CrudFlowSmokeTest`: `トークンなしで保護エンドポイントを呼ぶと401()` / `他人のリソースへのアクセスは404()`
+- `CategoryControllerTest`: `認証なしのアクセスは401()` （`@WithAnonymousUser`）
+- `TaskControllerTest`: `認証なしのアクセスは401()` （`@WithAnonymousUser`）
+
+### 検証不能（正直に記録）
+
+- Docker Desktop がこの環境で起動できないため、Testcontainers系 6件はスキップ（CI で実行される）
+
+---
+
 ## Sprint 1 — ドメインと CRUD ✅ 実装完了（2026-09-08）
 
 ### やったこと

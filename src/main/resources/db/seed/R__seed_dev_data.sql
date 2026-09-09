@@ -4,10 +4,13 @@
 -- LEARN: R__ で始まる repeatable migration は、ファイル内容(チェックサム)が変わるたびに再実行される。
 -- 何度流れても壊れないよう、すべて "既に在れば何もしない" 形で書く。
 
--- 認証実装前の "固定の現在ユーザー"。FixedCurrentUserProvider がこの email で引く。
+-- 開発用シードユーザー。パスワードは "dev-not-secret" の BCrypt ハッシュ(コスト10)。
+-- LEARN: BCrypt ハッシュは毎回異なるソルトを含むため、同じパスワードでも文字列が変わる。
+--        PasswordEncoder#matches() で照合するので DB の文字列が違っても問題ない。
+--        SQL に平文を書いてはいけない。
 insert into users (email, password, display_name, role, created_at, updated_at)
-values ('dev@example.com', '{noop}dev-not-secret', 'Dev User', 'USER', now(), now())
-on conflict (email) do nothing;
+values ('dev@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Dev User', 'USER', now(), now())
+on conflict (email) do update set password = excluded.password;
 
 -- サンプルカテゴリ(owner は上の dev ユーザー)
 insert into categories (name, color, owner_id, created_at, updated_at)

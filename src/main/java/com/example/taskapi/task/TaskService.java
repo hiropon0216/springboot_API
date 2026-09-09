@@ -2,6 +2,7 @@ package com.example.taskapi.task;
 
 import com.example.taskapi.category.Category;
 import com.example.taskapi.category.CategoryRepository;
+import com.example.taskapi.common.PageResponse;
 import com.example.taskapi.common.exception.BusinessRuleException;
 import com.example.taskapi.common.exception.ResourceNotFoundException;
 import com.example.taskapi.task.dto.TaskCreateRequest;
@@ -10,7 +11,10 @@ import com.example.taskapi.task.dto.TaskStatusUpdateRequest;
 import com.example.taskapi.task.dto.TaskUpdateRequest;
 import com.example.taskapi.user.CurrentUserProvider;
 import com.example.taskapi.user.User;
-import java.util.List;
+import java.time.LocalDate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,10 +39,32 @@ public class TaskService {
     this.currentUser = currentUser;
   }
 
-  public List<TaskResponse> list() {
-    return tasks.findByOwnerIdOrderByCreatedAtDesc(currentUser.currentUserId()).stream()
-        .map(mapper::toResponse)
-        .toList();
+  /**
+   * タスク一覧をページング・絞り込みして返す。
+   *
+   * <p>LEARN: {@link Pageable} は {@code page} / {@code size} / {@code sort} をカプセル化する。 コントローラの
+   * {@code @PageableDefault} で既定値を決め、クエリパラメータ {@code ?page=0&size=20&sort=createdAt,desc}
+   * で上書きできる。Spring MVC が自動で Pageable に変換する。
+   *
+   * <p>LEARN: Specification は {@code and()} でチェーンする。各条件が null のとき {@code conjunction()}
+   * (TRUE)を返すので、指定なし=全件という自然な振る舞いになる。
+   */
+  public PageResponse<TaskResponse> list(
+      TaskStatus status, Long categoryId, LocalDate dueBefore, Pageable pageable) {
+    Long ownerId = currentUser.currentUserId();
+
+    // LEARN: Specification を and() で組み合わせる。条件が null なら TaskSpecifications 内で
+    // cb.conjunction() を返すため、その条件は SQL に現れない(WHERE 句が動的になる)。
+    Specification<Task> spec =
+        TaskSpecifications.ownedBy(ownerId)
+            .and(TaskSpecifications.hasStatus(status))
+            .and(TaskSpecifications.inCategory(categoryId))
+            .and(TaskSpecifications.dueBefore(dueBefore));
+
+    // LEARN: findAll(Specification, Pageable) は JpaSpecificationExecutor のメソッド。
+    // 戻り値の Page<Task> を Page<TaskResponse> に変換してから PageResponse でラップする。
+    Page<TaskResponse> page = tasks.findAll(spec, pageable).map(mapper::toResponse);
+    return PageResponse.from(page);
   }
 
   public TaskResponse get(Long id) {
