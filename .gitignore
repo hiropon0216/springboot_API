@@ -34,3 +34,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### 学習用ローカルツール（コミットしない） ###
+/api-console.html

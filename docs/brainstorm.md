@@ -1,8 +1,26 @@
-# 壁打ち合意事項 — タスク管理API
+# 壁打ち合意事項
 
-- 承認日: 2026-09-06
+- 当初承認日: 2026-09-06（タスク管理 API）
 - 目的: Spring Boot による API の基本を、環境構築からクラウドデプロイまで一気通貫で復習する。
   API 自体の複雑さは重視せず、「基礎を一通り通す」ことと「学んだ知識を蓄積・復習できる状態で残す」ことを重視する。
+
+---
+
+## 2026-09-11 追記 — 題材を計算 API に変更（承認済み）
+
+Sprint 0〜4 でタスク管理 API を完成させたあと、学習の足場としては題材が大きすぎる
+（用途が伝わりにくい / コア概念が埋もれる）という結論に至り、題材を
+**四則演算をするだけの計算 API** に作り替えた。詳細と理由は [ADR 0006](adr/0006-pivot-to-calc-api.md)。
+
+- 新エンドポイント: `POST /api/v1/calculations` の 1 本のみ
+- 維持: スタック（Java 21 / Boot 4.0.8 / Maven）、層の一方向依存、package-by-feature、
+  DTO=record、ProblemDetail、Spotless / Checkstyle / ArchUnit / CI / Docker / Render
+- 撤去: 認証・認可、JPA / DB / Flyway、`User` / `Category` / `Task`、Testcontainers
+- ルートパッケージ `com.example.taskapi` → `com.example.calc`
+- 旧実装は git タグ `archive/task-api`（コミット `cfa1efd`）で保全
+
+**以下、`## 1` 〜 `## 7` はタスク管理 API 時点の合意記録**（履歴として保持。現行の仕様は
+[spec.md](spec.md) を参照）。
 
 ---
 

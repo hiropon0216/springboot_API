@@ -1,37 +1,14 @@
 # Render Blueprint 設定ファイル。
-# LEARN: render.yaml を使うと「インフラの定義をコードで管理」できる(IaC: Infrastructure as Code)。
-# Render のダッシュボードから "New Blueprint Instance" → このリポジトリを指定すると
-# Web Service + Managed PostgreSQL が一括プロビジョニングされる。
+# LEARN: render.yaml があると Render の "New Blueprint Instance" でこのリポジトリを指定するだけで
+# Web Service がプロビジョニングされる(Infrastructure as Code)。
+# このアプリは DB も認証も持たないので、必要なのは Web Service 1 つだけ。
 services:
   - type: web
-    name: taskapi
+    name: calc-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    # LEARN: Dockerfile 内の ENV SPRING_PROFILES_ACTIVE=prod と二重設定になるが、
-    # render.yaml 側で明示することで「このサービスは prod プロファイルで動く」が一目で分かる。
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
-      # LEARN: DATABASE_URL は Render の Managed PostgreSQL から自動で取得する。
-      # fromDatabase で DB 名と property を指定すると、Render がシークレット管理してくれる。
-      - key: DATABASE_URL
-        fromDatabase:
-          name: taskapi-db
-          property: connectionString
-      # LEARN: JWT 秘密鍵は generateValue: true で Render が自動生成・管理する。
-      # シークレットをリポジトリに置かずに済む。
-      - key: APP_JWT_SECRET
-        generateValue: true
-      - key: APP_JWT_EXPIRES_IN_SECONDS
-        value: "3600"
-    # LEARN: healthCheckPath はデプロイ後のヘルスチェックに使われる。
-    # /actuator/health が UP を返すまで Render はトラフィックを向けない。
+    # LEARN: /actuator/health が UP を返すまで Render はトラフィックを向けない。
     healthCheckPath: /actuator/health
-
-databases:
-  - name: taskapi-db
-    databaseName: taskapi
-    user: taskapi
-    # LEARN: Render 無料枠の Managed PostgreSQL は 90 日で削除される(2024年以降の仕様)。
-    # 学習用なら無料で十分。本番利用には paid プランを検討。
-    plan: free

@@ -1,48 +1,27 @@
-# 全プロファイル共通の設定。プロファイル固有は下部の "---" で区切ったドキュメント、
-# または application-<profile>.yml に置く。
+# 全プロファイル共通の設定。プロファイル固有は下部の "---" で区切ったドキュメントに置く。
+# LEARN: このアプリは DB も認証も持たないので、設定は「運用エンドポイント」と
+# 「API ドキュメント」の 2 つだけ。datasource や flyway の項目は無い。
 spring:
   application:
-    name: taskapi
+    name: calc-api
   profiles:
     # LEARN: 起動時に -Dspring.profiles.active=... が無ければ local を使う。
-    # test プロファイルは @ActiveProfiles("test") でテストが明示的に有効化する。
     default: local
-  jpa:
-    hibernate:
-      # LEARN: スキーマは Flyway が唯一の正。Hibernate には検証だけさせ、
-      # エンティティとテーブルの不一致を起動時に検出する。
-      ddl-auto: validate
-    # LEARN: open-in-view を切ると、遅延ロードは必ずトランザクション境界(=Service層)で
-    # 完結させる必要がある。N+1 やビュー層での遅延ロードを設計段階で防げる。
-    open-in-view: false
-    properties:
-      hibernate:
-        format_sql: true
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
 
 management:
   endpoints:
     web:
       exposure:
-        # Sprint 0 では health と info のみ公開。必要になったら足す。
+        # /actuator/health と /actuator/info だけ公開する。
         include: health,info
   endpoint:
     health:
-      show-details: when-authorized
-
-app:
-  jwt:
-    # LEARN: 開発用の固定キー。本番は環境変数 APP_JWT_SECRET から注入する（application-prod.yml 参照）。
-    # HMAC-SHA256 には 256 bit (32 bytes) 以上が必要。ここは学習用の固定値。
-    secret: dev-local-jwt-secret-key-must-be-at-least-256-bits-long-so-pad-it-here
-    expires-in-seconds: 3600
+      show-details: never
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
-    # LEARN: タグ(コントローラ)とオペレーションを名前順に並べると差分が安定する。
+    # タグ・オペレーションを名前順に並べると差分が安定する。
     operations-sorter: method
     tags-sorter: alpha
   api-docs:
@@ -50,34 +29,15 @@ springdoc:
 
 ---
 # ============================================================
-# local: 開発機。spring-boot-docker-compose が compose.yaml の
-# PostgreSQL を自動起動し、datasource を自動で結線する。
+# prod: Render などのクラウド環境。Dockerfile が SPRING_PROFILES_ACTIVE=prod を設定する。
 # ============================================================
 spring:
   config:
     activate:
-      on-profile: local
-  docker:
-    compose:
-      enabled: true
-      lifecycle-management: start-and-stop
-      file: compose.yaml
-  flyway:
-    # LEARN: local だけ seed 用のロケーションを足す。プロファイル別ドキュメントは
-    # リストをマージせず「置き換える」ので、db/migration も明示的に含める。
-    locations: classpath:db/migration,classpath:db/seed
-  jpa:
-    show-sql: true
+      on-profile: prod
 
----
-# ============================================================
-# test: Testcontainers が PostgreSQL を提供する(@ServiceConnection)。
-# docker-compose 連携は切る。
-# ============================================================
-spring:
-  config:
-    activate:
-      on-profile: test
-  docker:
-    compose:
-      enabled: false
+logging:
+  level:
+    root: WARN
+    # LEARN: 本番ではアプリのログだけ INFO。フレームワークの詳細ログは出さない。
+    com.example.calc: INFO

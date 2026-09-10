@@ -10,34 +10,26 @@
 	</parent>
 
 	<groupId>com.example</groupId>
-	<artifactId>taskapi</artifactId>
+	<artifactId>calc-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>taskapi</name>
-	<description>Task management API for reviewing Spring Boot basics</description>
+	<name>calc-api</name>
+	<description>Arithmetic API for reviewing Spring Boot basics</description>
 
 	<properties>
 		<java.version>21</java.version>
-		<!-- LEARN: 依存・プラグインのバージョンは1箇所に集約する。Boot の BOM が管理しない
-		     ものだけここで固定し、あとは spring-boot-starter-parent に委ねる。 -->
+		<!-- LEARN: Boot の BOM が管理しない依存・プラグインだけ、ここでバージョンを固定する。 -->
 		<springdoc.version>3.1.0</springdoc.version>
 		<archunit.version>1.4.1</archunit.version>
 		<spotless.version>2.44.5</spotless.version>
 		<checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
 		<checkstyle.version>10.21.4</checkstyle.version>
-		<!-- LEARN: MapStruct のバージョンはプラグインの annotationProcessorPaths でも参照する。
-		     ここで1箇所管理することでズレを防ぐ。-->
-		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
 
 	<dependencies>
-		<!-- === Web / 永続化 / バリデーション / 運用 === -->
+		<!-- === Web / バリデーション / 運用 === -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -45,25 +37,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-
-		<!-- === DB マイグレーション === -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 
 		<!-- === API ドキュメント (Swagger UI) === -->
@@ -71,26 +45,6 @@
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
-		</dependency>
-
-		<!-- === ランタイムのみ === -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-docker-compose</artifactId>
-			<scope>runtime</scope>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.postgresql</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-
-		<!-- === Lombok (entity のみ最小限に使用) === -->
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
 		</dependency>
 
 		<!-- === テスト === -->
@@ -101,71 +55,17 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-testcontainers</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers-junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers-postgresql</artifactId>
-			<scope>test</scope>
-		</dependency>
-
-		<!-- LEARN: H2 は "Docker 無しで全レイヤを通す" スモークテスト専用。本番・通常テストは
-		     PostgreSQL(Testcontainers)。H2 は PostgreSQL 互換モードで使うが方言差はゼロではないので
-		     常用しない。 -->
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
 
 		<!-- LEARN: ArchUnit は「層の依存方向」をテストとして固定する。
-		     人にも Claude にもアーキテクチャ違反を CI で気づかせる仕掛け。 -->
+		     Controller → Service の一方向を CI で守るガードレール。 -->
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
 			<version>${archunit.version}</version>
 			<scope>test</scope>
-		</dependency>
-
-		<!-- LEARN: MapStruct はアノテーションプロセッサによりコンパイル時にマッパー実装を自動生成する。
-		     実行時に何も要らない(コード生成済み)ので scope は compile のままでよい。
-		     手書きマッパー(CategoryMapper)と比較: 定型コードが激減するが、マッピングルールが
-		     @Mapping アノテーションに散らばり読みにくくなる面もある。ADR 0005 に記録。-->
-		<dependency>
-			<groupId>org.mapstruct</groupId>
-			<artifactId>mapstruct</artifactId>
-			<version>${mapstruct.version}</version>
 		</dependency>
 	</dependencies>
 
@@ -174,29 +74,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<annotationProcessorPaths>
-						<!-- LEARN: Lombok は MapStruct より先に並べる。
-						     MapStruct が Lombok 生成のメソッド(getter/setter)を読む必要があるため、
-						     処理順序が重要。Lombok → MapStruct の順でアノテーション処理される。-->
-						<path>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</path>
-						<!-- LEARN: mapstruct-processor がコンパイル時に @Mapper インターフェースを
-						     スキャンし、XxxMapperImpl クラスを生成する。生成コードは target/ 配下に出力される。-->
-						<path>
-							<groupId>org.mapstruct</groupId>
-							<artifactId>mapstruct-processor</artifactId>
-							<version>${mapstruct.version}</version>
-						</path>
-					</annotationProcessorPaths>
-				</configuration>
 			</plugin>
 
 			<!-- LEARN: Spotless がフォーマットの唯一の正。CI では check、手元では
@@ -223,8 +100,7 @@
 				</executions>
 			</plugin>
 
-			<!-- LEARN: Checkstyle はフォーマット以外の規約（star import 禁止など）を担当。
-			     Sprint 0 では最小限のルールから始め、Sprint 3 で強度を上げる。 -->
+			<!-- LEARN: Checkstyle はフォーマット以外の規約（star import 禁止など）を担当。 -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>

@@ -20,9 +20,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # LEARN: verify で compile → test(単体/スライス/Testcontainers) →
+      # LEARN: verify で compile → test(単体 + @WebMvcTest スライス + コンテキスト起動) →
       # Spotless check → Checkstyle → ArchUnit まで一気に走る。
-      # ubuntu-latest runner には Docker があるので Testcontainers も動く。
       - name: Build and verify
         run: ./mvnw -B verify
 
