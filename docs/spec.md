@@ -90,7 +90,7 @@
 
 ### 今後の候補（未着手・任意）
 
-- 学習ノート `docs/learning/` を計算 API の切り口で書き直す
+- 学習ノート `docs/learning/sprint-5.md` を計算 API の切り口で新規作成
 - `git tag sprint-5`
 - Render へ実デプロイして公開 URL を得る
 

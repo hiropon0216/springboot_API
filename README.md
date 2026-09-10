@@ -105,7 +105,8 @@ curl -s -XPOST http://localhost:8080/api/v1/calculations \
 |---|---|
 | `docs/brainstorm.md` | 設計合意（末尾に計算 API への変更記録）|
 | `docs/spec.md` | 現行仕様・受け入れ基準・Sprint 5 |
-| `docs/adr/` | 軽量 ADR（`0006` が題材変更）|
+| `docs/adr/` | 軽量 ADR（`0001` 開発の進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更）|
 | `docs/progress.md` | 実装進捗 |
-| `docs/learning/` | スプリントごとの学習ノート（`sprint-0/1` はタスク管理 API 時点の記録）|
-| `docs/glossary.md` | 累積用語集 |
+
+タスク管理 API 時代の学習ノート・用語集・旧 ADR（0003 PostgreSQL / 0005 MapStruct）は
+git タグ `archive/task-api` に残っている。

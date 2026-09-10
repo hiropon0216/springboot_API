@@ -55,8 +55,12 @@ artifactId も `taskapi` → `calc-api`。
 - アーキテクチャ不変条件のうち **#5 所有者ベース認可** と **#6 Flyway** は対象が無くなるため削除。
   残りの #1〜#4 は維持。
 - Sprint 0〜4 の成果は git 履歴に残る。タグ `archive/task-api`（コミット `cfa1efd`）で参照可能。
-- `docs/learning/sprint-0〜1.md`、`docs/adr/0003`（PostgreSQL）、`glossary.md` の一部は
-  もう現行コードに対応しないが、学習記録として残す。
+- 現行コードに対応しなくなった以下は削除した（内容は git 履歴と `archive/task-api` タグに残る）:
+  `docs/adr/0003`（PostgreSQL + Docker Compose）、`docs/adr/0005`（MapStruct 比較）、
+  `docs/feedback/sprint-1.md`、`docs/learning/sprint-0.md` / `sprint-1.md` / `review-deck.md`、
+  `docs/glossary.md`。
+- ADR 0001 / 0002 / 0004 は決定内容が計算 API でも有効なため残す
+  （0001 のゴールデンパス `category/` の記述は 0004 とこの ADR で `calculation/` に更新済み）。
 
 ## 不採用案
 

@@ -22,7 +22,6 @@ Spring Boot による API の基本を、**最小構成で一通り復習する*
 | `docs/progress.md` | 実装進捗・自己評価・引き渡し事項 | Claude（generator 役）|
 | `docs/feedback/sprint-N.md` | スプリントの合否とバグ一覧 | Claude（evaluator 役）|
 | `docs/learning/sprint-N.md` | 概念・用語・つまずき・復習問 | スプリント末 |
-| `docs/glossary.md` | 累積用語集（1 行/語）| 随時 |
 
 作業を始める前に必ず `docs/brainstorm.md` と `docs/spec.md` を読むこと。現在地は `README.md` の「現在地」節。
 
