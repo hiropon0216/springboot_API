@@ -1,12 +1,22 @@
 # 全プロファイル共通の設定。プロファイル固有は下部の "---" で区切ったドキュメントに置く。
-# LEARN: このアプリは DB も認証も持たないので、設定は「運用エンドポイント」と
-# 「API ドキュメント」の 2 つだけ。datasource や flyway の項目は無い。
 spring:
   application:
     name: calc-api
   profiles:
     # LEARN: 起動時に -Dspring.profiles.active=... が無ければ local を使う。
     default: local
+
+  jpa:
+    # LEARN: OSIV（Open Session In View）を切る。既定の true は「Controller やビューの描画中も
+    # DB セッションを開いたままにする」挙動で、遅延読み込みの例外は減るが、
+    # 「どこで SQL が飛ぶか分からない」「接続を長く握る」という代償が大きい。
+    # 切ると、トランザクション（= Service のメソッド）の外で DB を触った時点で例外になり、
+    # 境界の設計ミスにすぐ気づける。
+    open-in-view: false
+    properties:
+      hibernate:
+        # 生成された SQL を読みやすく整形する（show-sql と併用したときに効く）。
+        format_sql: true
 
 management:
   endpoints:
@@ -16,6 +26,8 @@ management:
         include: health,info
   endpoint:
     health:
+      # LEARN: DB を持つと health に db の状態が含まれる（接続できなければ DOWN になる）。
+      # 詳細（どのコンポーネントが落ちたか）は外部に見せない方針なので never のまま。
       show-details: never
 
 springdoc:
@@ -29,12 +41,46 @@ springdoc:
 
 ---
 # ============================================================
+# local: 手元での開発。DB は compose.yaml の PostgreSQL。
+# LEARN: datasource の url / username / password をここに書いていないのは、
+# spring-boot-docker-compose が compose.yaml を読んで自動で流し込むから。
+# 「接続情報が 2 か所にある」状態を避けられる。
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  jpa:
+    hibernate:
+      # LEARN: エンティティの定義からテーブルを作る/差分を追加する。学習用の割り切り。
+      # 実務では ddl-auto: validate にして、スキーマ変更は Flyway / Liquibase の
+      # マイグレーション SQL で版管理する（列の削除やリネームを Hibernate は安全に扱えない）。
+      ddl-auto: update
+    # LEARN: 手元では発行された SQL を見る。「1 件の API 呼び出しで SQL が何本飛んだか」を
+    # 目で確認できることが、N+1 問題などに気づく第一歩。
+    show-sql: true
+
+---
+# ============================================================
 # prod: Render などのクラウド環境。Dockerfile が SPRING_PROFILES_ACTIVE=prod を設定する。
+# LEARN: 接続情報はイメージに焼かず、環境変数から受け取る（render.yaml が DB から流し込む）。
+# ${DB_HOST} のような書き方は「環境変数 DB_HOST の値」。未設定なら起動時に落ちる = 事故に気づける。
 # ============================================================
 spring:
   config:
     activate:
       on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
 
 logging:
   level:

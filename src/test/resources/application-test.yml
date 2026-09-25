@@ -1,0 +1,20 @@
+# テスト専用の設定（@ActiveProfiles("test") で有効化）。
+# LEARN: テストは H2（インメモリ）で回す。Docker を起動していなくても `./mvnw verify` が通り、
+# CI も速い。開発・本番は PostgreSQL で、方言差は JPA（Hibernate）が吸収する。
+spring:
+  datasource:
+    # LEARN: mem:<名前> はプロセス内のメモリ上に DB を作る。JVM が終われば消える。
+    url: jdbc:h2:mem:calc-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ''
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      # LEARN: テストでは毎回スキーマを作り直す（create-drop）。前のテストの残骸に影響されない。
+      ddl-auto: create-drop
+    # 生成される SQL を確認したいときは true にする。既定は静かにしておく。
+    show-sql: false
+  docker:
+    compose:
+      # LEARN: テストでは Docker を触らせない（既定でもテスト中はスキップされるが、明示しておく）。
+      enabled: false

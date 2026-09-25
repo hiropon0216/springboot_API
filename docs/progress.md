@@ -1,5 +1,88 @@
 # 実装進捗
 
+## Sprint 6 — Model クラスと DB 連携 ✅ 実装完了（2026-09-25）
+
+計算 API に Model クラス（JPA エンティティ）と DB 連携を組み込み、REST の 6 操作を持つ 1 リソースにした。
+合意は [brainstorm.md](brainstorm.md) 2026-09-25 追記 / [ADR 0007](adr/0007-reintroduce-model-and-database.md)。
+
+### やったこと
+
+| 分類 | 内容 |
+|---|---|
+| pom.xml | 追加: `spring-boot-starter-data-jpa` / `postgresql`(runtime) / `spring-boot-docker-compose`(runtime・optional) / `spring-boot-starter-data-jpa-test`(test) / `h2`(test) |
+| インフラ | `compose.yaml` 新規（PostgreSQL 17-alpine + healthcheck + 名前付きボリューム `calc-pgdata`） |
+| Model | `Calculation`（`@Entity`、`calculations` テーブル、`IDENTITY` 採番、`NUMERIC(38,10)`、`@Enumerated(STRING)`、`@PrePersist`/`@PreUpdate`、`left`/`right` は予約語なので `left_operand`/`right_operand`） |
+| Repository | `CalculationRepository`（`JpaRepository` + 派生クエリ 2 本: 新しい順全件 / 演算子で絞り込み） |
+| Mapper | `CalculationMapper`（entity → response DTO。末尾ゼロの正規化も担当） |
+| DTO | `CalculationResponse` に `id` / `memo` / `createdAt` / `updatedAt` を追加、`MemoUpdateRequest` を新規、`CalculationRequest` に `@Digits(integer = 28, fraction = 10)` |
+| Service | CRUD 6 操作、クラスに `@Transactional(readOnly = true)` ＋ 書き込みメソッドで上書き、`orElseThrow` で 404、保存前に小数 10 桁へ丸め、更新は `saveAndFlush` |
+| Controller | GET 一覧（`?operator=`）/ GET 1 件 / POST（**201 + `Location`**、`UriComponentsBuilder`）/ PUT（全置換）/ PATCH（memo）/ DELETE（**204**） |
+| common | `ResourceNotFoundException` ＋ ハンドラ（404・`urn:problem-type:not-found`） |
+| resources | `application.yml`: `open-in-view: false`、local（PostgreSQL・`ddl-auto: update`・`show-sql: true`）/ prod（`${DB_HOST}` 等）。`src/test/resources/application-test.yml`（H2・`create-drop`） |
+| テスト | 単体 15（repository をモック）/ `@DataJpaTest` 6（新規）/ `@WebMvcTest` 18 / context 1（`@ActiveProfiles("test")`）/ ArchUnit 6（+3 ルール）= **46** |
+| ArchUnit | 追加: Controller は Repository に依存しない / Repository は interface / エンティティは Controller に登場しない |
+| infra | `render.yaml` に PostgreSQL（`fromDatabase` で接続情報を注入）、`ci.yml` の文言更新（テストは H2 なので DB サービス不要） |
+| 学習ログ | `[n/4]` → `[n/5]`（受信 → 入口 → 業務 → **保存** → 応答）に拡張 |
+| ドキュメント | `spec`（全面改訂）/ `brainstorm`（追記）/ `README`（全面改訂）/ `CLAUDE.md` / ADR 0007 / 本ファイル / `docs/learning/sprint-6.md` |
+
+### 検証結果（実際に動かした）
+
+PostgreSQL 17（Docker Compose）に対して実 HTTP で確認。
+
+| 受け入れ基準（spec.md §5）| 結果 |
+|---|---|
+| POST で 201 + `Location` | ✅ `HTTP/1.1 201` / `Location: http://localhost:8080/api/v1/calculations/1` |
+| 4 演算が正しい `result` | ✅ `2+3=5` / `9-4=5` / `7×6=42` / `6÷3=2` |
+| `10/3`→`3.333333333`、`50.0×2`→`100`、`0.1+0.2`→`0.3` | ✅ curl + 単体テスト |
+| 0 除算で 422（`type` 付き）| ✅ `{"status":422,"type":"urn:problem-type:business-rule"}` |
+| `operator` 欠落で 400 + `errors.operator` | ✅ `{"errors":{"operator":"null は許可されていません"}}` |
+| `operator:"PLUS"` で 400 | ✅ |
+| 小数 11 桁の入力で 400（500 にならない）| ✅ `{"errors":{"left":"値は次の範囲にしてください (<整数 28 桁>.<小数点以下 10 桁>)"}}` |
+| 一覧が新しい順 / `?operator=DIVIDE` で絞り込み / 0 件でも 200 と `[]` | ✅ |
+| 一覧の不正な `operator` で 400 | ✅ |
+| `GET /{id}` 200 / 存在しない id で 404 / `/abc` で 400 | ✅ 404 は `urn:problem-type:not-found` |
+| PATCH で memo だけ変わり `updatedAt` が進む | ✅ `updatedAt` 12:10:41.629 → 12:10:41.911（式と `result` は不変）|
+| PATCH で `{"memo":null}` によりメモを消せる | ✅ |
+| PATCH で 201 文字の memo は 400 | ✅ `errors.memo` |
+| PUT で再計算され memo が null に戻る | ✅ `1+2=3`（memo あり）→ `9-4=5`（memo null）|
+| PUT の項目欠落で 400 / 存在しない id で 404 | ✅ |
+| DELETE 204 → 同じ id を再度 DELETE で 404 → `GET` も 404 | ✅ |
+| **アプリ再起動後も履歴が残る** | ✅ 再起動後の `GET` で同じ行が返る。`psql` でも 2 行確認 |
+| `/actuator/health` = UP（DB 接続込み）| ✅ `{"groups":["liveness","readiness"],"status":"UP"}` |
+| `/swagger-ui.html` 200、`/v3/api-docs` に 5 メソッド | ✅ `get` / `post` / `put` / `patch` / `delete` |
+| `./mvnw verify` グリーン | ✅ **46 tests / 0 failures / 0 skipped**、Checkstyle 0 違反、Spotless clean、ArchUnit 6 pass |
+| `./mvnw verify` が Docker なしでも通る | ✅ テストは H2。`@SpringBootTest` は `@ActiveProfiles("test")` |
+| 別オリジンから CORS で叩ける | ✅ `Origin: http://localhost:5500` の PATCH プリフライトに `Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS`。許可外オリジンは 403 |
+
+実装中に見つけて直した 2 件（どちらも実際に叩いて気づいたもの）:
+
+1. **同じリソースなのに表示が違う** — DB は `NUMERIC(38,10)` なので読み戻すと `7.0000000000`。
+   作成直後（メモリ上）は `7`。→ `CalculationMapper` で末尾ゼロを落とし、DTO 境界で統一した。
+2. **PATCH / PUT のレスポンスの `updatedAt` が古い** — `@PreUpdate` はフラッシュ時に走るため、
+   DTO を組んだ時点ではまだ更新されていなかった。→ `saveAndFlush` してから変換するようにした。
+
+### 検証不能・未実施
+
+- Render への実デプロイは未実施（アカウント未設定）。`render.yaml` / `ci.yml` は構成のみ。
+- `docker build`（Dockerfile のイメージビルド）は未検証。Docker デーモン自体は今回起動できたので、
+  Sprint 5 時点の「Docker Desktop が起動しない」という記録は解消している。
+
+### 引き渡し事項
+
+- **破壊的変更**: POST の成功が 200 → **201 + `Location`**、入力に桁数制約（`@Digits`）追加。
+  既存クライアント（`api-console.html` を含む）は 200 前提なら直す必要がある。
+- `api-console.html` は **POST だけ**対応のまま（`.gitignore` 済み・未コミット）。
+  6 操作に対応させるのは今後の候補。当面は Swagger UI が全操作をカバーする。
+- スキーマは `ddl-auto: update` に任せている。**列の削除・リネーム・型変更はできない**ので、
+  そうした変更が必要になったら先に Flyway を入れる（[spec.md](spec.md) §6）。
+- テストだけ H2 という割り切りをしている。DB 固有の SQL（ネイティブクエリ・`jsonb` など）を
+  書き始めた時点で Testcontainers に移行すべき。
+- `git tag sprint-6` は未実施。
+- DB のデータは Docker ボリューム `calc-pgdata` に残る。まっさらにするなら `docker compose down -v`。
+
+---
+
+
 ## Sprint 5 — 題材リビルド（計算 API）✅ 実装完了（2026-09-11）
 
 タスク管理 API を計算 API に作り替え。合意は [brainstorm.md](brainstorm.md) 2026-09-11 追記 /

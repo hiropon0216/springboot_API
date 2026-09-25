@@ -1,7 +1,14 @@
 # Render Blueprint 設定ファイル。
 # LEARN: render.yaml があると Render の "New Blueprint Instance" でこのリポジトリを指定するだけで
-# Web Service がプロビジョニングされる(Infrastructure as Code)。
-# このアプリは DB も認証も持たないので、必要なのは Web Service 1 つだけ。
+# Web Service と PostgreSQL がまとめてプロビジョニングされる(Infrastructure as Code)。
+# DB を持つようになったので、必要なのは「Web Service 1 つ + Database 1 つ」。
+
+databases:
+  - name: calc-db
+    databaseName: calc
+    user: calc
+    plan: free
+
 services:
   - type: web
     name: calc-api
@@ -10,5 +17,29 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      # LEARN: 接続情報をここに直接書かない。fromDatabase で Render が作った DB の値を
+      # 実行時に注入する(パスワードがリポジトリに入らない)。
+      # application.yml の prod プロファイルが ${DB_HOST} などとして読む。
+      - key: DB_HOST
+        fromDatabase:
+          name: calc-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: calc-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: calc-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: calc-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: calc-db
+          property: password
     # LEARN: /actuator/health が UP を返すまで Render はトラフィックを向けない。
+    # DB を持つと health は DB 接続も見るので、DB が落ちていれば DOWN になる。
     healthCheckPath: /actuator/health

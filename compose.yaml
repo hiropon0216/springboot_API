@@ -1,0 +1,30 @@
+# ローカル開発用の PostgreSQL。
+# LEARN: pom.xml の spring-boot-docker-compose が、アプリ起動時にこのファイルを見て
+# `docker compose up` を実行し、コンテナの接続情報（URL / ユーザ / パスワード）を
+# Spring に自動で流し込む。だから application.yml に datasource を書いていない。
+# ファイル名は compose.yaml（または docker-compose.yaml）が既定の探索対象。
+services:
+  postgres:
+    # LEARN: タグを 17-alpine のように固定する。latest にすると「昨日動いた環境」が
+    # 今日は別のバージョンになりうる（再現性が無くなる）。
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: calc
+      POSTGRES_USER: calc
+      POSTGRES_PASSWORD: calc
+    ports:
+      # LEARN: ホスト 5432 → コンテナ 5432。psql や DB クライアントから直接覗けるように公開する。
+      - '5432:5432'
+    # LEARN: healthcheck があると、Spring は「DB が受け付け可能になるまで」待ってから接続する。
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U calc -d calc']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      # LEARN: 名前付きボリュームに置くと、コンテナを作り直してもデータが残る。
+      # まっさらにしたいときは `docker compose down -v`（-v がボリュームも消す）。
+      - calc-pgdata:/var/lib/postgresql/data
+
+volumes:
+  calc-pgdata:

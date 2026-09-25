@@ -40,6 +40,33 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- === 永続化 (Model / Repository) ===
+		     LEARN: spring-boot-starter-data-jpa が Hibernate(JPA 実装) + HikariCP(接続プール)
+		     + Spring Data JPA(Repository の自動実装) をまとめて連れてくる。@Entity を書いて
+		     インタフェースを 1 本宣言するだけで CRUD の SQL が手に入る。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- LEARN: JDBC ドライバは実行時にだけ必要なので runtime スコープ。
+		     アプリコードから org.postgresql.* を直接書くことは無い(書いたら DB 依存が漏れている)。 -->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- LEARN: compose.yaml があると、アプリ起動時に `docker compose up` を自動実行し、
+		     接続情報(URL / ユーザ / パスワード)を Spring に流し込む。だから application.yml に
+		     datasource を書かなくても DB につながる。テスト実行時は既定でスキップされる。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-docker-compose</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
+
 		<!-- === API ドキュメント (Swagger UI) === -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
@@ -56,6 +83,24 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- LEARN: @DataJpaTest(Repository だけのスライステスト)用。
+		     Boot 4 では test 用自動設定がモジュールごとの starter に分かれている。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- LEARN: テストは H2(インメモリ)で回す。Docker を起動していなくても
+		     `./mvnw verify` が通り、CI も速い。開発・本番は PostgreSQL で、
+		     方言差は JPA が吸収するのでコードは同じ。
+		     割り切りである点は自覚しておく(DB 固有 SQL を書き始めたら Testcontainers に移る)。 -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
 
