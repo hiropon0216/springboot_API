@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * 計算履歴リソースのエンドポイント。REST の基本 5 操作（一覧・取得・作成・置換・部分更新・削除）を 1 リソースで通す。
+ * 計算履歴リソースのエンドポイント。REST の基本 6 操作（一覧・取得・作成・全置換・部分更新・削除）を 1 リソースで通す。
  *
  * <p>LEARN: Controller の仕事は「HTTP の通訳」。{@code @RequestBody} で JSON を DTO に、{@code @Valid} で
  * 検証し、Service に渡し、戻り値を JSON にして返す。計算も SQL も一切ここに書かない。
