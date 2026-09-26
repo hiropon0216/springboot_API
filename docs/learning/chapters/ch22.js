@@ -18,7 +18,7 @@ ${Fig.compare(
 )}
 ${Fig.flow([
   { ic: "📄", t: "Dockerfile", s: "箱の作り方（レシピ）", tone: "dim" },
-  { ic: "📦", t: "イメージ", s: "出来上がった箱（変わらない）", tone: "accent" },
+  { ic: "📦", t: "イメージ", s: "できあがった箱（変わらない）", tone: "accent" },
   { ic: "▶️", t: "コンテナ", s: "箱を動かしている実体<br>（何個でも起動できる）", tone: "ok" }
 ], ["docker build", "docker run"], { caption: "イメージは設計図兼ひな形、コンテナはそこから起動した実行中のもの" })}`,
       refs: [

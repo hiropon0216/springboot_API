@@ -44,7 +44,7 @@ ${Fig.compare(
   { t: "❌ 逆流と飛び越し", tone: "err", html: `
 <ul>
 <li><b>逆流</b>：Service が Controller を参照する<br>→ 業務ロジックが HTTP の都合に縛られ、Web 以外から使えなくなる</li>
-<li><b>飛び越し</b>：Controller が Repository を直接使う<br>→ 「1 行で済むから」と SQL や業務の判断が Controller に漏れ、トランザクション境界も曖昧になる</li>
+<li><b>飛び越し</b>：Controller が Repository を直接使う<br>→ 「1 行で済むから」と SQL や業務の判断が Controller に漏れ、トランザクション境界もあいまいになる</li>
 </ul>` },
   "依存の向きがそろっていると、下の層を変えても上の層への影響を見積もれる"
 )}
@@ -155,7 +155,7 @@ ${Fig.cards([
       choices: ["Service が Controller を参照する", "Controller が Service を参照する", "Service が Repository を参照する", "Repository が DB を使う"],
       explain: "下の層が上の層を知ってしまうこと。", see: "s2" },
     { q: "「飛び越し」（Controller が Repository を直接使う）が困る理由として最も適切なものは？",
-      choices: ["業務の判断や SQL が Controller に漏れ、トランザクション境界も曖昧になるから", "動作が遅くなるから", "コンパイルできないから", "Repository が使えなくなるから"],
+      choices: ["業務の判断や SQL が Controller に漏れ、トランザクション境界もあいまいになるから", "動作が遅くなるから", "コンパイルできないから", "Repository が使えなくなるから"],
       explain: "1 行で済む近道が積み重なると、業務ロジックが web 層に散らばる。", see: "s2" },
     { q: "Service が HTTP を知らないことの利点は？",
       choices: ["Web 以外（バッチなど）からも同じ業務ロジックを使える", "HTTP が速くなる", "テストが不要になる", "DB が不要になる"],

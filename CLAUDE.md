@@ -102,6 +102,8 @@ DB を持たない機能なら 2 を飛ばす（「すべての機能に DB が�
 - 計算履歴を DB に永続化し REST の 6 操作を持つ（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）
 - 一覧はページング（`?page=&size=`・`PagedModel`・並びはサーバー固定）、PATCH は JSON Merge Patch、
   500 も ProblemDetail（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）
+- 学習アプリ（`docs/learning/index.html`）は REST API 編とアジャイル・スクラム編の 2 コース
+  （[ADR 0009](docs/adr/0009-learning-app.md) / [ADR 0010](docs/adr/0010-agile-course.md)。書き方は `docs/learning/chapters/AUTHORING.md`）
 - DB: 開発・本番は PostgreSQL 17（Docker Compose / Render）、**テストは H2 インメモリ**
 - スキーマは `ddl-auto: update`。Flyway は未導入（意図的な保留。[spec.md](docs/spec.md) §6）
 - 依存: webmvc / validation / actuator / data-jpa / postgresql / docker-compose / springdoc-openapi

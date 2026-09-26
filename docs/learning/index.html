@@ -6,14 +6,17 @@
 <title>計算 API で学ぶ REST API</title>
 <!--
   教科書 ＆ 問題集アプリ（ADR 0009）。外部ライブラリなし。file:// で直接開いて動く。
+  コースは 2 つ（ADR 0010）: REST API 編（#ch/3）とアジャイル・スクラム編（#agile/ch/3）。
 
   構成:
-    index.html            … このファイル。画面と動き（章の解放・出題・採点・進捗）
-    chapters/outline.js   … 全 26 章の目次
-    chapters/anchors.js   … コードへのリンクの行番号（自動生成。LearningLinksTest が検査する）
-    chapters/chNN.js      … 章ごとの本文と問題（書き方は chapters/AUTHORING.md）
+    index.html                  … このファイル。画面と動き（コース・章の解放・出題・採点・進捗）
+    chapters/outline.js         … REST API 編の目次（全 26 章）
+    chapters/chNN.js            … REST API 編の章ごとの本文と問題（書き方は chapters/AUTHORING.md）
+    chapters/agile/outline.js   … アジャイル・スクラム編の目次（全 9 章）
+    chapters/agile/chNN.js      … アジャイル・スクラム編の章（Calc.register({ course: "agile", … })）
+    chapters/anchors.js         … 実物へのリンクの行番号（自動生成。両コース共通。LearningLinksTest が検査する）
 
-  新しい章を足したら、下の <script src="chapters/chNN.js"> を 1 行足す。
+  新しい章を足したら、下の <script src="chapters/…/chNN.js"> を 1 行足す。
 -->
 <style>
   :root {
@@ -58,11 +61,17 @@
 
   /* ===== 骨格 ===== */
   header.top {
-    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px;
     background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5;
   }
-  header.top h1 { font-size: 16px; margin: 0; flex: 1; }
+  header.top h1 { font-size: 16px; margin: 0; flex: 1; min-width: 0; }
   header.top h1 a { color: inherit; text-decoration: none; }
+  /* コースの切り替え（ADR 0010） */
+  .courses { display: flex; gap: 4px; }
+  .courses a { font-size: 13px; font-weight: 600; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--line);
+               color: var(--ink); text-decoration: none; white-space: nowrap; line-height: 1.6; }
+  .courses a:hover { border-color: var(--accent); }
+  .courses a[aria-current=page] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   header.top .prog { font-size: 12px; color: var(--dim); white-space: nowrap; }
   header.top button { padding: 5px 10px; font-size: 13px; }
   .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); max-width: 1200px; margin: 0 auto; }
@@ -139,6 +148,7 @@
   .box li { margin: 10px 0; }
   .expect { font-size: 13px; color: var(--dim); margin-top: 2px; }
   .box.ai { border-left: 4px solid var(--lec); }
+  .box.wf { border-left: 4px solid var(--warn); }
 
   /* テスト */
   .quiz-cta { text-align: center; margin: 40px 0 0; padding: 24px 16px; border: 2px dashed var(--line); border-radius: 12px; }
@@ -327,6 +337,9 @@
     .stepper .sn { flex-direction: row; flex-wrap: wrap; }
     .stepper .sn .node { flex: 1 1 40%; }
     .layer { flex-direction: column; align-items: flex-start; gap: 2px; }
+    header.top h1 { font-size: 15px; }
+    .courses { order: 3; width: 100%; }
+    .courses a { flex: 1; text-align: center; }
   }
 
   @media (max-width: 860px) {
@@ -343,7 +356,8 @@
 <body>
 
 <header class="top">
-  <h1><a href="#">計算 API で学ぶ REST API</a></h1>
+  <h1><a href="#" id="appTitle">計算 API で学ぶ REST API</a></h1>
+  <nav class="courses" id="courseNav" aria-label="コース"></nav>
   <span class="prog" id="topProg"></span>
   <button class="ghost" id="settingsBtn" type="button">設定</button>
 </header>
@@ -549,19 +563,46 @@ function hydrateSteppers(root) {
   });
 }
 
-const Calc = {
-  chapters: {},
-  problems: [],
-  register(ch) {
-    validateChapter(ch);
-    Calc.chapters[ch.no] = ch;
+// ===== コース（ADR 0010） ==============================================
+// LEARN: 画面・図・出題・保存の仕組みは共有し、目次と章だけをコースごとに持つ。
+//   API 編の URL（#ch/3）と保存データの鍵（passed["3"]）は Sprint 9 のまま変えない。
+//   アジャイル編は URL を #agile/ch/3、保存の鍵を "agile:3" にして、同じ保存データの中で住み分ける。
+const COURSES = {
+  api: {
+    name: "REST API", title: "計算 API で学ぶ REST API", outline: () => window.CALC_OUTLINE || [],
+    kinds: { impl: "実装", lecture: "座学", mixed: "実装＋座学", summary: "まとめ" }, observe: "動かして観察"
+  },
+  agile: {
+    name: "アジャイル・スクラム", title: "計算 API の開発で学ぶアジャイル・スクラム", outline: () => window.AGILE_OUTLINE || [],
+    kinds: { impl: "実物", lecture: "座学", mixed: "実物＋座学", summary: "まとめ" }, observe: "やってみる"
   }
 };
+// 保存データの鍵。API 編は章番号だけ（Sprint 9 と同じ）、それ以外は "コース:章番号"
+function sk(c, no) { return c === "api" ? String(no) : c + ":" + no; }
+// 画面の URL。API 編: # / #ch/3 / #ch/3/quiz、アジャイル編: #agile / #agile/ch/3 / #agile/ch/3/quiz
+function hashOf(c, no, sub) {
+  if (no == null) return c === "api" ? "#" : "#" + c;
+  return (c === "api" ? "#" : "#" + c + "/") + "ch/" + no + (sub ? "/" + sub : "");
+}
+function go(c, no, sub) { return "location.hash='" + hashOf(c, no, sub) + "'"; }
 
-function validateChapter(ch) {
-  const where = "第 " + ch.no + " 章";
+const Calc = {
+  chapters: { api: {}, agile: {} },
+  problems: [],
+  register(ch) {
+    const c = ch.course || "api";
+    if (!COURSES[c]) { Calc.problems.push("第 " + ch.no + " 章: コース " + c + " が無い"); return; }
+    validateChapter(ch, c);
+    Calc.chapters[c][ch.no] = ch;
+  }
+};
+function chapterOf(c, no) { return Calc.chapters[c][no]; }
+
+function validateChapter(ch, c) {
+  const where = (c === "api" ? "" : COURSES[c].name + " ") + "第 " + ch.no + " 章";
   const p = (msg) => Calc.problems.push(where + ": " + msg);
   if (!ch.goal || !ch.sections || !ch.questions) p("goal / sections / questions のどれかが無い");
+  if (c === "agile" && !ch.wf) p("wf（ウォーターフォールではこうだった）が無い");
   const ids = new Set((ch.sections || []).map(s => s.id));
   (ch.sections || []).forEach(s => { if (!s.id || !s.title || !s.body) p("節に id / title / body が無い: " + (s.title || s.id)); });
   if ((ch.questions || []).length < 15) p("問題が " + (ch.questions || []).length + " 問しかない（15 問以上）");
@@ -587,33 +628,32 @@ function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-// 問題の識別子。章番号 ＋ 問題文のハッシュ（問題の順番を入れ替えても記録がずれない。問題文を直すと別の問題扱い）
-function qid(no, q) {
+// 問題の識別子。保存の鍵（章）＋ 問題文のハッシュ（問題の順番を入れ替えても記録がずれない。問題文を直すと別の問題扱い）
+function qid(c, no, q) {
   let h = 5381;
   for (let i = 0; i < q.q.length; i++) h = ((h << 5) + h + q.q.charCodeAt(i)) >>> 0;
-  return no + ":" + h.toString(36);
+  return sk(c, no) + ":" + h.toString(36);
 }
 // 「苦手」＝ 最後に解いたとき間違えた問題
-function weakQuestions(no) {
-  const ch = Calc.chapters[no];
+function weakQuestions(c, no) {
+  const ch = chapterOf(c, no);
   if (!ch) return [];
-  return ch.questions.filter(q => { const s = state.qstats[qid(no, q)]; return s && s.last === false; });
+  return ch.questions.filter(q => { const s = state.qstats[qid(c, no, q)]; return s && s.last === false; });
 }
-function weakCountAll() {
-  return outlineChapters().reduce((n, o) => n + weakQuestions(o.no).length, 0);
+function weakCountAll(c) {
+  return outlineChapters(c).reduce((n, o) => n + weakQuestions(c, o.no).length, 0);
 }
 
 // ===== 章の状態 =========================================================
-function outlineChapters() { return window.CALC_OUTLINE.filter(o => o.no); }
-function status(no) {
-  if (!Calc.chapters[no]) return "draft";
-  if (state.passed[no]) return "passed";
-  if (no === 1 || state.passed[no - 1]) return "open";
+function outlineChapters(c) { return COURSES[c].outline().filter(o => o.no); }
+function status(c, no) {
+  if (!chapterOf(c, no)) return "draft";
+  if (state.passed[sk(c, no)]) return "passed";
+  if (no === 1 || state.passed[sk(c, no - 1)]) return "open";
   return "locked";
 }
 const ST_ICON = { passed: "✓", open: "▶", locked: "🔒", draft: "—" };
 const ST_TEXT = { passed: "合格", open: "学習中", locked: "未解放", draft: "準備中" };
-const KIND_TEXT = { impl: "実装", lecture: "座学", mixed: "実装＋座学", summary: "まとめ" };
 
 // ===== コードへのリンクを描画 ==========================================
 function refUrls(path, anchor) {
@@ -649,99 +689,133 @@ function refsBlock(refs, label) {
 const $ = (id) => document.getElementById(id);
 const view = $("view");
 let quiz = null; // 受験中のテスト
+let course = "api"; // いま表示しているコース
 
-function renderToc(currentNo) {
+function renderHeader(c) {
+  document.title = COURSES[c].title;
+  $("appTitle").textContent = COURSES[c].title;
+  $("appTitle").setAttribute("href", hashOf(c));
+  $("courseNav").innerHTML = Object.keys(COURSES).map(k =>
+    '<a href="' + hashOf(k) + '"' + (k === c ? ' aria-current="page"' : "") + ">" + escapeHtml(COURSES[k].name) + "</a>").join("");
+}
+
+function renderToc(c, currentNo) {
   let html = "";
-  window.CALC_OUTLINE.forEach(o => {
+  COURSES[c].outline().forEach(o => {
     if (o.part) { html += '<div class="part">第 ' + o.part + " 部　" + escapeHtml(o.partTitle) + "</div>"; return; }
-    const st = status(o.no);
-    const best = state.best[o.no] != null ? " title=\"最高 " + state.best[o.no] + " 点\"" : "";
-    html += '<a class="ch ' + st + (o.no === currentNo ? " current" : "") + '" href="#ch/' + o.no + '"' + best + ">" +
+    const st = status(c, o.no);
+    const best = state.best[sk(c, o.no)];
+    html += '<a class="ch ' + st + (o.no === currentNo ? " current" : "") + '" href="' + hashOf(c, o.no) + '"' +
+      (best != null ? ' title="最高 ' + best + ' 点"' : "") + ">" +
       '<span class="st st-' + st + '" aria-label="' + ST_TEXT[st] + '">' + ST_ICON[st] + "</span>" +
       "<span>" + o.no + ". " + escapeHtml(o.title) + "</span></a>";
   });
   $("toc").innerHTML = html;
-  const written = outlineChapters().filter(o => Calc.chapters[o.no]).length;
-  const passed = outlineChapters().filter(o => state.passed[o.no]).length;
-  $("topProg").textContent = "合格 " + passed + " / 公開 " + written + " / 全 " + outlineChapters().length + " 章";
+  const all = outlineChapters(c);
+  const written = all.filter(o => chapterOf(c, o.no)).length;
+  const passed = all.filter(o => state.passed[sk(c, o.no)]).length;
+  $("topProg").textContent = "合格 " + passed + " / 公開 " + written + " / 全 " + all.length + " 章";
 }
 
-function meta(no) { return outlineChapters().find(o => o.no === no); }
-function partOf(no) {
+function meta(c, no) { return outlineChapters(c).find(o => o.no === no); }
+function partOf(c, no) {
   let part = null;
-  for (const o of window.CALC_OUTLINE) { if (o.part) part = o; if (o.no === no) return part; }
+  for (const o of COURSES[c].outline()) { if (o.part) part = o; if (o.no === no) return part; }
   return null;
 }
 
-function renderHome() {
-  const all = outlineChapters();
-  const passed = all.filter(o => state.passed[o.no]).length;
-  const next = all.find(o => status(o.no) === "open");
-  view.innerHTML =
-    '<div class="hero"><h2>計算 API で学ぶ<br>REST API の設計と AI 駆動開発</h2>' +
-    "<p>このリポジトリの実物（四則演算と、その履歴を DB に残す API）を教材に、REST API の設計の大局を学ぶ教科書と問題集。" +
-    "IT の前提知識ゼロから読めるように書いている。</p></div>" +
-    '<div class="steps">' +
-    "<div><b>1. 読む</b>章の本文を読む。全体の中での位置から入る。</div>" +
-    "<div><b>2. 実物を開く</b>リンクからコードを開き、「確認すること」を自分の目で確かめる。</div>" +
-    "<div><b>3. 動かす</b>アプリを起動して、書いてある通りになるか観察する。</div>" +
-    "<div><b>4. 解く</b>章末の 4 択 10 問。9 問以上で次の章が開く。</div></div>" +
+// コースごとのホームの前半（見出し・読み方）と、末尾の注意書き
+const HOME = {
+  api: {
+    hero: '<div class="hero"><h2>計算 API で学ぶ<br>REST API の設計と AI 駆動開発</h2>' +
+      "<p>このリポジトリの実物（四則演算と、その履歴を DB に残す API）を教材に、REST API の設計の大局を学ぶ教科書と問題集。" +
+      "IT の前提知識ゼロから読めるように書いている。</p></div>" +
+      '<div class="steps">' +
+      "<div><b>1. 読む</b>章の本文を読む。全体の中での位置から入る。</div>" +
+      "<div><b>2. 実物を開く</b>リンクからコードを開き、「確認すること」を自分の目で確かめる。</div>" +
+      "<div><b>3. 動かす</b>アプリを起動して、書いてある通りになるか観察する。</div>" +
+      "<div><b>4. 解く</b>章末の 4 択 10 問。9 問以上で次の章が開く。</div></div>",
+    note: '<div class="note"><b>はじめに</b><br>' +
+      "・「VS Code で開く」は VS Code が必要。リポジトリの場所が違う場合は右上の「設定」で変える。<br>" +
+      "・「動かして観察」ではアプリを起動する（<code>./mvnw spring-boot:run</code>、Docker が必要）。" +
+      "ワークスペース直下の <code>api-console.html</code> を Live Server で開くと、画面から API を叩ける。<br>" +
+      "・進捗はこのブラウザに保存される（別のブラウザや端末とは共有されない）。別の PC に移すときや、" +
+      "閲覧データを消す前は、右上の「設定」から書き出しておく。</div>"
+  },
+  agile: {
+    hero: '<div class="hero"><h2>計算 API の開発で学ぶ<br>アジャイル・スクラムの基本</h2>' +
+      "<p>現場でスクラムを回すために最低限必要な考え方と仕組みを、ウォーターフォールとの対比で学ぶ教科書と問題集。" +
+      "実例には、この計算 API を作ってきた記録（spec・DoD・ADR・進捗・学習ノート）を使う。</p></div>" +
+      '<div class="steps">' +
+      "<div><b>1. 読む</b>図を中心に仕組みをつかむ。スクラムガイド 2020 年版に合わせている。</div>" +
+      "<div><b>2. 比べる</b>章末の「ウォーターフォールではこうだった」で、知っているやり方と対応づける。</div>" +
+      "<div><b>3. 実物を開く</b>このリポジトリの文書を開き、スクラムの概念がどこに現れているか確かめる。</div>" +
+      "<div><b>4. 解く</b>現場の状況を与える 4 択 10 問。9 問以上で次の章が開く。</div></div>",
+    note: '<div class="note"><b>はじめに</b><br>' +
+      "・この編のゴールは資格の暗記ではなく、<b>スクラムチームの一員として迷わず動ける</b>こと。問題も「この状況でどうする？」を中心にしている。<br>" +
+      "・REST API 編とは独立に進められる（どちらから始めてもよい）。進捗は同じ保存データに入り、書き出し・読み込みも両方まとめて行う。<br>" +
+      "・このリポジトリの「Sprint」は、厳密なスクラムのスプリントではない（第 9 章で正直に振り返る）。違いを見つけることも学習になる。</div>"
+  }
+};
+
+function renderHome(c) {
+  const all = outlineChapters(c);
+  const passed = all.filter(o => state.passed[sk(c, o.no)]).length;
+  const next = all.find(o => status(c, o.no) === "open");
+  view.innerHTML = HOME[c].hero +
     "<h3>進捗</h3><div>合格 " + passed + " / 全 " + all.length + " 章</div>" +
-    '<div class="bar"><div style="width:' + (passed / all.length * 100) + '%"></div></div>' +
-    (next ? '<p><button type="button" onclick="location.hash=\'#ch/' + next.no + '\'">続きから：第 ' + next.no + " 章 " + escapeHtml(next.title) + "</button></p>" :
+    '<div class="bar"><div style="width:' + (all.length ? passed / all.length * 100 : 0) + '%"></div></div>' +
+    (next ? '<p><button type="button" onclick="' + go(c, next.no) + '">続きから：第 ' + next.no + " 章 " + escapeHtml(next.title) + "</button></p>" :
       "<p>公開済みの章はすべて合格した。</p>") +
-    renderWeakSummary() + renderHistory() +
-    '<div class="note"><b>はじめに</b><br>' +
-    "・「VS Code で開く」は VS Code が必要。リポジトリの場所が違う場合は右上の「設定」で変える。<br>" +
-    "・「動かして観察」ではアプリを起動する（<code>./mvnw spring-boot:run</code>、Docker が必要）。" +
-    "ワークスペース直下の <code>api-console.html</code> を Live Server で開くと、画面から API を叩ける。<br>" +
-    "・進捗はこのブラウザに保存される（別のブラウザや端末とは共有されない）。別の PC に移すときや、" +
-    "閲覧データを消す前は、右上の「設定」から書き出しておく。</div>";
+    renderWeakSummary(c) + renderHistory(c) + HOME[c].note;
 }
 
 // 苦手な問題（最後に間違えた問題）の章ごとの数
-function renderWeakSummary() {
-  const rows = outlineChapters().map(o => ({ o, n: weakQuestions(o.no).length })).filter(r => r.n > 0);
+function renderWeakSummary(c) {
+  const rows = outlineChapters(c).map(o => ({ o, n: weakQuestions(c, o.no).length })).filter(r => r.n > 0);
   if (!rows.length) return "";
   return "<h3>苦手な問題（最後に間違えた問題）</h3>" +
     Fig.cards(rows.map(r => ({ t: "第 " + r.o.no + " 章　" + r.n + " 問",
-      d: escapeHtml(r.o.title) + '<br><a href="#ch/' + r.o.no + '/review">間違えた問題だけ復習する →</a>', tone: "warn" })),
-      "合計 " + weakCountAll() + " 問。章末テストでも、間違えた問題ほど優先して出題される");
+      d: escapeHtml(r.o.title) + '<br><a href="' + hashOf(c, r.o.no, "review") + '">間違えた問題だけ復習する →</a>', tone: "warn" })),
+      "合計 " + weakCountAll(c) + " 問。章末テストでも、間違えた問題ほど優先して出題される");
 }
 
-// 受験の記録（直近 10 件）
-function renderHistory() {
-  if (!state.attempts.length) return "";
+// 受験の記録（このコースの直近 10 件）。Sprint 9 の記録には course が無いので API 編として扱う
+function renderHistory(c) {
+  const mine = state.attempts.filter(a => (a.course || "api") === c);
+  if (!mine.length) return "";
   const fmt = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, "0");
     return (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
-  const recent = state.attempts.slice(-10).reverse();
+  const recent = mine.slice(-10).reverse();
   return "<h3>学習の記録</h3>" + Fig.matrix("日時", ["章", "点", "結果"], recent.map(a => ({
     h: fmt(a.at),
     c: ["第 " + a.no + " 章",
       a.score + " / " + a.total,
       a.mode === "review" ? { v: "復習", tone: "lec" } : a.score >= Math.ceil(a.total * PASS_RATIO) ? { v: "合格", tone: "ok" } : { v: "不合格", tone: "err" }]
-  })), "直近 10 件（全 " + state.attempts.length + " 件）");
+  })), "直近 10 件（全 " + mine.length + " 件）");
 }
 
-function renderLocked(no) {
-  const st = status(no);
-  const m = meta(no);
+function renderLocked(c, no) {
+  const st = status(c, no);
+  const m = meta(c, no);
   view.innerHTML = '<div class="locked-view"><div class="big">' + (st === "draft" ? "📝" : "🔒") + "</div>" +
     "<h2>第 " + no + " 章 " + escapeHtml(m ? m.title : "") + "</h2>" +
-    (st === "draft" ? "<p>この章はまだ準備中。</p>" :
+    (!m ? '<p>この章は無い。</p><p><button type="button" onclick="' + go(c) + '">ホームへ</button></p>' :
+      st === "draft" ? "<p>この章はまだ準備中。</p>" :
       "<p>第 " + (no - 1) + " 章の章末テストで 10 問中 9 問以上正解すると開く。</p>" +
-      '<p><button type="button" onclick="location.hash=\'#ch/' + (no - 1) + '\'">第 ' + (no - 1) + " 章へ</button></p>") + "</div>";
+      '<p><button type="button" onclick="' + go(c, no - 1) + '">第 ' + (no - 1) + " 章へ</button></p>") + "</div>";
 }
 
-function renderChapter(no) {
-  const ch = Calc.chapters[no];
-  const m = meta(no);
-  const part = partOf(no);
+function renderChapter(c, no) {
+  const ch = chapterOf(c, no);
+  const m = meta(c, no);
+  const part = partOf(c, no);
+  const key = sk(c, no);
   let html = '<div class="crumb">第 ' + part.part + " 部　" + escapeHtml(part.partTitle) + "</div>" +
     '<h2 class="ch-title">第 ' + no + " 章　" + escapeHtml(m.title) +
-    '<span class="badge ' + m.kind + '">' + KIND_TEXT[m.kind] + "</span></h2>";
-  if (state.passed[no]) html += '<div class="crumb" style="color:var(--ok)">✓ 合格済み' +
-    (state.best[no] != null ? "（最高 " + state.best[no] + " 点）" : "") + "。いつでも解き直せる。</div>";
+    '<span class="badge ' + m.kind + '">' + COURSES[c].kinds[m.kind] + "</span></h2>";
+  if (state.passed[key]) html += '<div class="crumb" style="color:var(--ok)">✓ 合格済み' +
+    (state.best[key] != null ? "（最高 " + state.best[key] + " 点）" : "") + "。いつでも解き直せる。</div>";
   html += '<div class="goal"><b>この章のゴール</b><ul>' + ch.goal.map(g => "<li>" + g + "</li>").join("") + "</ul></div>";
   ch.sections.forEach((s, i) => {
     html += '<section class="sec" id="ch' + no + "-" + s.id + '"><h3>' + no + "." + (i + 1) + "　" + escapeHtml(s.title) + "</h3>" +
@@ -753,18 +827,19 @@ function renderChapter(no) {
     html += "</section>";
   });
   if (ch.observe) {
-    html += '<div class="box"><h3>動かして観察</h3>' + (ch.observe.intro || "") + "<ol>" +
+    html += '<div class="box"><h3>' + COURSES[c].observe + "</h3>" + (ch.observe.intro || "") + "<ol>" +
       ch.observe.steps.map(st => "<li>" + st.do + (st.expect ? '<div class="expect">期待する結果: ' + st.expect + "</div>" : "") + "</li>").join("") +
       "</ol></div>";
   }
+  if (ch.wf) html += '<div class="box wf"><h3>ウォーターフォールではこうだった</h3>' + ch.wf + "</div>";
   if (ch.ai) html += '<div class="box ai"><h3>AI 駆動開発の観点</h3>' + ch.ai + "</div>";
   const need = Math.ceil(Math.min(QUIZ_SIZE, ch.questions.length) * PASS_RATIO);
+  const weak = weakQuestions(c, no).length;
   html += '<div class="quiz-cta"><p>章末テスト：' + ch.questions.length + " 問のプールから " + Math.min(QUIZ_SIZE, ch.questions.length) +
-    " 問を出題。" + need + " 問以上で合格" + (Calc.chapters[no + 1] ? "し、次の章が開く" : "") + "。</p>" +
-    '<div class="actions"><button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button>' +
-    (weakQuestions(no).length ? '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '/review\'">間違えた問題だけ復習する（' +
-      weakQuestions(no).length + " 問）</button>" : "") + "</div>" +
-    (weakQuestions(no).length ? '<p style="margin-top:10px">章末テストでは、間違えた問題ほど優先して出題される。復習は合否・最高点に影響しない。</p>' : "") + "</div>";
+    " 問を出題。" + need + " 問以上で合格" + (chapterOf(c, no + 1) ? "し、次の章が開く" : "") + "。</p>" +
+    '<div class="actions"><button type="button" onclick="' + go(c, no, "quiz") + '">章末テストを受ける</button>' +
+    (weak ? '<button type="button" class="ghost" onclick="' + go(c, no, "review") + '">間違えた問題だけ復習する（' + weak + " 問）</button>" : "") + "</div>" +
+    (weak ? '<p style="margin-top:10px">章末テストでは、間違えた問題ほど優先して出題される。復習は合否・最高点に影響しない。</p>' : "") + "</div>";
   view.innerHTML = html;
   hydrateRefs(view);
   hydrateSteppers(view);
@@ -777,26 +852,26 @@ function shuffle(a) {
   return b;
 }
 // 出題の重み。まだ解いていない問題と、最後に間違えた問題ほど選ばれやすい
-function questionWeight(no, q) {
-  const s = state.qstats[qid(no, q)];
+function questionWeight(c, no, q) {
+  const s = state.qstats[qid(c, no, q)];
   if (!s) return 2;
   return 1 + (s.last === false ? 4 : 0) + 2 * (s.wrong / Math.max(1, s.seen));
 }
 // 重み付きの抽選（重複なし）。Efraimidis–Spirakis 法: 各問に random^(1/重み) の鍵を付け、大きい順に取る
-function weightedPick(no, questions, n) {
+function weightedPick(c, no, questions, n) {
   return questions
-    .map(q => ({ q, key: Math.pow(Math.random(), 1 / questionWeight(no, q)) }))
+    .map(q => ({ q, key: Math.pow(Math.random(), 1 / questionWeight(c, no, q)) }))
     .sort((a, b) => b.key - a.key)
     .slice(0, n)
     .map(x => x.q);
 }
-function startQuiz(no, mode) {
-  const ch = Calc.chapters[no];
-  const picked = mode === "review" ? shuffle(weakQuestions(no)).slice(0, QUIZ_SIZE) : weightedPick(no, ch.questions, QUIZ_SIZE);
+function startQuiz(c, no, mode) {
+  const ch = chapterOf(c, no);
+  const picked = mode === "review" ? shuffle(weakQuestions(c, no)).slice(0, QUIZ_SIZE) : weightedPick(c, no, ch.questions, QUIZ_SIZE);
   quiz = {
-    no, mode: mode || "normal",
+    course: c, no, mode: mode || "normal",
     items: picked.map(q => ({
-      id: qid(no, q),
+      id: qid(c, no, q),
       q: q.q, explain: q.explain, see: q.see, refs: q.refs,
       // 章ファイルでは choices[0] が正解。表示順はここで混ぜる
       choices: shuffle(q.choices.map((text, i) => ({ text, correct: i === 0 })))
@@ -805,32 +880,34 @@ function startQuiz(no, mode) {
     submitted: false
   };
 }
-function renderQuiz(no, mode) {
+function renderQuiz(c, no, mode) {
   mode = mode || "normal";
-  if (!quiz || quiz.no !== no || quiz.mode !== mode) startQuiz(no, mode);
-  const ch = Calc.chapters[no];
-  const m = meta(no);
+  if (!quiz || quiz.course !== c || quiz.no !== no || quiz.mode !== mode) startQuiz(c, no, mode);
+  const ch = chapterOf(c, no);
+  const m = meta(c, no);
   const review = quiz.mode === "review";
-  let html = '<div class="crumb"><a href="#ch/' + no + '">← 第 ' + no + " 章 " + escapeHtml(m.title) + " に戻る</a></div>" +
+  let html = '<div class="crumb"><a href="' + hashOf(c, no) + '">← 第 ' + no + " 章 " + escapeHtml(m.title) + " に戻る</a></div>" +
     '<h2 class="ch-title">' + (review ? "間違えた問題の復習" : "章末テスト") + "</h2>";
   if (!quiz.items.length) {
     view.innerHTML = html + '<div class="result pass"><div class="score">🎉</div><div>この章に、最後に間違えた問題は無い。</div>' +
-      '<div class="actions"><button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button></div></div>';
+      '<div class="actions"><button type="button" onclick="' + go(c, no, "quiz") + '">章末テストを受ける</button></div></div>';
     return;
   }
   const need = Math.ceil(quiz.items.length * PASS_RATIO);
   const score = quiz.items.filter((it, i) => quiz.answers[i] != null && it.choices[quiz.answers[i]].correct).length;
   if (quiz.submitted) {
     const pass = score >= need;
-    const again = review ? (weakQuestions(no).length ? "まだ間違えている問題で復習する（" + weakQuestions(no).length + " 問）" : "") : "新しい 10 問で解き直す";
+    const weak = weakQuestions(c, no).length;
+    const hasNext = !!chapterOf(c, no + 1);
+    const again = review ? (weak ? "まだ間違えている問題で復習する（" + weak + " 問）" : "") : "新しい 10 問で解き直す";
     html += '<div class="result ' + (review || pass ? "pass" : "fail") + '"><div class="score">' + score + " / " + quiz.items.length + "</div>" +
-      "<div>" + (review ? (weakQuestions(no).length ? "正解した問題は苦手リストから外れた。" : "苦手な問題が無くなった！") + "（復習は合否に影響しない）" :
-        pass ? "合格！" + (Calc.chapters[no + 1] ? "第 " + (no + 1) + " 章が開いた。" : "") :
+      "<div>" + (review ? (weak ? "正解した問題は苦手リストから外れた。" : "苦手な問題が無くなった！") + "（復習は合否に影響しない）" :
+        pass ? "合格！" + (hasNext ? "第 " + (no + 1) + " 章が開いた。" : "") :
         "不合格（" + need + " 問以上で合格）。解説と本文を見直して、もう一度。") + "</div>" +
       '<div class="actions">' + (again ? '<button type="button" id="retry" class="ghost">' + again + "</button>" : "") +
-      (!review && weakQuestions(no).length ? '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '/review\'">間違えた問題だけ復習する</button>' : "") +
-      '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '\'">本文に戻る</button>' +
-      (!review && pass && Calc.chapters[no + 1] ? '<button type="button" onclick="location.hash=\'#ch/' + (no + 1) + '\'">第 ' + (no + 1) + " 章へ進む</button>" : "") +
+      (!review && weak ? '<button type="button" class="ghost" onclick="' + go(c, no, "review") + '">間違えた問題だけ復習する</button>' : "") +
+      '<button type="button" class="ghost" onclick="' + go(c, no) + '">本文に戻る</button>' +
+      (!review && pass && hasNext ? '<button type="button" onclick="' + go(c, no + 1) + '">第 ' + (no + 1) + " 章へ進む</button>" : "") +
       "</div></div>";
   } else {
     html += '<p style="color:var(--dim)">' + quiz.items.length + " 問すべてに答えてから採点する。" +
@@ -849,7 +926,7 @@ function renderQuiz(no, mode) {
       const ok = ans != null && it.choices[ans].correct;
       const sec = it.see ? ch.sections.findIndex(s => s.id === it.see) : -1;
       html += '<div class="explain"><span class="verdict ' + (ok ? "ok" : "ng") + '">' + (ok ? "正解" : "不正解") + "</span>　" + it.explain +
-        (sec >= 0 ? '<div style="margin-top:6px">本文で確認: <a href="#ch/' + no + "/" + it.see + '">' + no + "." + (sec + 1) + " " +
+        (sec >= 0 ? '<div style="margin-top:6px">本文で確認: <a href="' + hashOf(c, no, it.see) + '">' + no + "." + (sec + 1) + " " +
           escapeHtml(ch.sections[sec].title) + "</a></div>" : "") +
         (it.refs && it.refs.length ? '<div style="margin-top:4px">' + it.refs.map(String).join("<br>") + "</div>" : "") + "</div>";
     }
@@ -882,36 +959,42 @@ function renderQuiz(no, mode) {
       state.qstats[it.id] = st;
     });
     const s = quiz.items.filter((it, i) => it.choices[quiz.answers[i]].correct).length;
+    const key = sk(c, no);
     if (!review) {
-      state.best[no] = Math.max(state.best[no] || 0, s);
-      if (s >= need) state.passed[no] = true;
+      state.best[key] = Math.max(state.best[key] || 0, s);
+      if (s >= need) state.passed[key] = true;
     }
-    state.attempts.push({ no, score: s, total: quiz.items.length, mode: quiz.mode, at: now });
+    state.attempts.push({ course: c, no, score: s, total: quiz.items.length, mode: quiz.mode, at: now });
     if (state.attempts.length > MAX_ATTEMPTS) state.attempts = state.attempts.slice(-MAX_ATTEMPTS);
     save();
-    renderToc(no);
-    renderQuiz(no, quiz.mode);
+    renderToc(c, no);
+    renderQuiz(c, no, quiz.mode);
     window.scrollTo(0, 0);
   });
   const retry = $("retry");
-  if (retry) retry.addEventListener("click", () => { const md = quiz.mode; quiz = null; renderQuiz(no, md); window.scrollTo(0, 0); });
+  if (retry) retry.addEventListener("click", () => { const md = quiz.mode; quiz = null; renderQuiz(c, no, md); window.scrollTo(0, 0); });
 }
 
-// ===== ルーティング（#ch/3 / #ch/3/s2 / #ch/3/quiz） =====================
+// ===== ルーティング =======================================================
+// API 編: # / #ch/3 / #ch/3/s2 / #ch/3/quiz、アジャイル編: #agile / #agile/ch/3 / #agile/ch/3/quiz
 function route() {
-  const m = location.hash.match(/^#ch\/(\d+)(?:\/(\w+))?$/);
-  const no = m ? Number(m[1]) : null;
-  renderToc(no);
-  if (!no) { renderHome(); window.scrollTo(0, 0); return; }
-  if (!meta(no) || status(no) === "locked" || status(no) === "draft") { renderLocked(no); window.scrollTo(0, 0); return; }
-  if (m[2] === "quiz" || m[2] === "review") {
+  const m = (location.hash || "#").match(/^#(?:(agile)(?:\/|$))?(?:ch\/(\d+)(?:\/(\w+))?)?$/);
+  const c = m && m[1] ? m[1] : "api";
+  const no = m && m[2] ? Number(m[2]) : null;
+  const sub = m ? m[3] : null;
+  course = c;
+  renderHeader(c);
+  renderToc(c, no);
+  if (!no) { renderHome(c); window.scrollTo(0, 0); return; }
+  if (!meta(c, no) || status(c, no) === "locked" || status(c, no) === "draft") { renderLocked(c, no); window.scrollTo(0, 0); return; }
+  if (sub === "quiz" || sub === "review") {
     if (quiz && quiz.submitted) quiz = null; // 採点後に戻ってきたら新しく出題する
-    renderQuiz(no, m[2] === "review" ? "review" : "normal"); window.scrollTo(0, 0);
+    renderQuiz(c, no, sub === "review" ? "review" : "normal"); window.scrollTo(0, 0);
   }
   else {
-    if (quiz && quiz.no === no && quiz.submitted) quiz = null;
-    renderChapter(no);
-    const target = m[2] ? document.getElementById("ch" + no + "-" + m[2]) : null;
+    if (quiz && quiz.course === c && quiz.no === no && quiz.submitted) quiz = null;
+    renderChapter(c, no);
+    const target = sub ? document.getElementById("ch" + no + "-" + sub) : null;
     if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
   }
   if (window.matchMedia("(max-width: 860px)").matches) $("tocDetails").open = false;
@@ -925,10 +1008,10 @@ $("settingsSave").addEventListener("click", () => {
   save(); $("settings").close(); route();
 });
 $("resetBtn").addEventListener("click", () => {
-  if (!confirm("すべての章の合格記録・最高点・学習の記録を消す。よい？（先に書き出しておくと戻せる）")) return;
+  if (!confirm("両方のコースの合格記録・最高点・学習の記録をすべて消す。よい？（先に書き出しておくと戻せる）")) return;
   const repo = state.repo;
   state = EMPTY_STATE(); state.repo = repo; quiz = null;
-  save(); $("settings").close(); location.hash = ""; route();
+  save(); $("settings").close(); location.hash = hashOf(course); route();
 });
 
 // 書き出し: 進捗を JSON ファイルとして保存させる
@@ -966,7 +1049,7 @@ $("importFile").addEventListener("change", () => {
     const err = importData(text);
     $("importFile").value = "";
     if (err) { $("ioMsg").textContent = "⚠ " + err; return; }
-    $("ioMsg").textContent = "読み込んだ（合格 " + Object.keys(state.passed).length + " 章・記録 " + state.attempts.length + " 件）。";
+    $("ioMsg").textContent = "読み込んだ（両コース合わせて合格 " + Object.keys(state.passed).length + " 章・記録 " + state.attempts.length + " 件）。";
     route();
   });
 });
@@ -1000,6 +1083,16 @@ $("importFile").addEventListener("change", () => {
 <script src="chapters/ch24.js"></script>
 <script src="chapters/ch25.js"></script>
 <script src="chapters/ch26.js"></script>
+<script src="chapters/agile/outline.js"></script>
+<script src="chapters/agile/ch01.js"></script>
+<script src="chapters/agile/ch02.js"></script>
+<script src="chapters/agile/ch03.js"></script>
+<script src="chapters/agile/ch04.js"></script>
+<script src="chapters/agile/ch05.js"></script>
+<script src="chapters/agile/ch06.js"></script>
+<script src="chapters/agile/ch07.js"></script>
+<script src="chapters/agile/ch08.js"></script>
+<script src="chapters/agile/ch09.js"></script>
 
 <script>
 if (Calc.problems.length) {

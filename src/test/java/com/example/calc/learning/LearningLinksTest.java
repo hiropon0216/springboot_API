@@ -40,8 +40,11 @@ class LearningLinksTest {
   private static final Pattern CODE_CALL =
       Pattern.compile("\\bcode\\(\\s*(['\"])(.*?)\\1\\s*,\\s*(['\"])(.*?)\\3");
 
+  /** コースごとの章ファイルの置き場所（chapters/ からの相対）。"" は REST API 編、"agile/" はアジャイル編（ADR 0010）。 */
+  private static final List<String> COURSE_DIRS = List.of("", "agile/");
+
   private static final Pattern SCRIPT_TAG =
-      Pattern.compile("<script src=\"chapters/(ch\\d+\\.js)\"></script>");
+      Pattern.compile("<script src=\"chapters/((?:agile/)?ch\\d+\\.js)\"></script>");
 
   private record Ref(String chapterFile, String path, String anchor) {}
 
@@ -88,13 +91,22 @@ class LearningLinksTest {
 
   // ===== 以下、補助 =====
 
+  /** 章ファイルの一覧（chapters/ からの相対パス。例: ch01.js / agile/ch01.js）。 */
   private static TreeSet<String> chapterFiles() throws IOException {
-    try (Stream<Path> files = Files.list(CHAPTERS)) {
-      return files
-          .map(p -> p.getFileName().toString())
-          .filter(name -> name.matches("ch\\d+\\.js"))
-          .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+    TreeSet<String> names = new TreeSet<>();
+    for (String dir : COURSE_DIRS) {
+      Path base = CHAPTERS.resolve(dir);
+      if (!Files.isDirectory(base)) {
+        continue;
+      }
+      try (Stream<Path> files = Files.list(base)) {
+        files
+            .map(p -> p.getFileName().toString())
+            .filter(name -> name.matches("ch\\d+\\.js"))
+            .forEach(name -> names.add(dir + name));
+      }
     }
+    return names;
   }
 
   private static List<Ref> collectRefs() throws IOException {

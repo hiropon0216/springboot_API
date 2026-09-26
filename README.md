@@ -6,7 +6,8 @@ Spring Boot の基本を、**最小構成で一通り通す**ための学習用�
 > 変遷: タスク管理 API（Sprint 0〜4）→ 計算 API に作り替え（[ADR 0006](docs/adr/0006-pivot-to-calc-api.md)）
 > → Model クラスと DB 連携を組み込み（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）
 > → ページング・Merge Patch などで REST API として仕上げ（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）
-> → この API を題材にした教科書 ＆ 問題集アプリ（[ADR 0009](docs/adr/0009-learning-app.md)）。
+> → この API を題材にした教科書 ＆ 問題集アプリ（[ADR 0009](docs/adr/0009-learning-app.md)）
+> → 同じアプリに「アジャイル・スクラム編」を追加（[ADR 0010](docs/adr/0010-agile-course.md)）。
 > タスク管理 API の実装は git タグ `archive/task-api` で参照できる。
 
 ## これで学べること
@@ -61,6 +62,9 @@ Claude が planner / generator / evaluator を会話の中で果たす。詳細�
 - [x] **Sprint 9: 学習アプリ 全章 ＋ 学習記録** — [ADR 0009](docs/adr/0009-learning-app.md)
   - 全 26 章・424 問・図 306 個（座学の章：外部 API・N+1・認証認可・API セキュリティ など）
   - 間違えた問題を優先して出題、「間違えた問題だけ復習」、進捗の書き出し・読み込み
+- [x] **Sprint 10: 学習アプリ「アジャイル・スクラム編」** — [ADR 0010](docs/adr/0010-agile-course.md)
+  - ヘッダーでコースを切り替え（REST API 編 / アジャイル・スクラム編）。解放・進捗・苦手はコースごと
+  - 全 9 章・144 問。ウォーターフォールとの対比、このリポジトリの docs を実例にした振り返り
 
 ## 開発環境
 
@@ -163,14 +167,15 @@ Render のデプロイフックを呼ぶ（`RENDER_DEPLOY_HOOK_URL` を GitHub S
 | パス | 内容 |
 |---|---|
 | `docs/brainstorm.md` | 設計合意の記録（計算 API 化・DB 連携・REST の仕上げ・学習アプリ・アジャイル編の計画）|
-| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 5〜9・今後の候補 |
-| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ / `0009` 学習アプリ）|
+| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 5〜10・今後の候補 |
+| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ / `0009` 学習アプリ / `0010` アジャイル編）|
 | `docs/progress.md` | 実装進捗・検証結果・引き渡し事項 |
-| `docs/learning/index.html` | **教科書 ＆ 問題集アプリ**（ブラウザで開く。全 26 章・424 問。章末 4 択で 9 割以上なら次の章へ。間違えた問題の復習・進捗の書き出しつき）|
+| `docs/learning/index.html` | **教科書 ＆ 問題集アプリ**（ブラウザで開く。REST API 編 26 章・424 問 ＋ アジャイル・スクラム編 9 章・144 問。章末 4 択で 9 割以上なら次の章へ。間違えた問題の復習・進捗の書き出しつき）|
 | `docs/learning/chapters/AUTHORING.md` | 章の書き方と図の部品（教材を直す・足すとき）|
 | `docs/learning/sprint-6.md` | Sprint 6 の学習ノート（Model / DB / REST の要点と復習問）|
 | `docs/learning/sprint-7.md` | Sprint 7 の学習ノート（ページング / Merge Patch / 500 / 桁あふれ）|
 | `docs/learning/sprint-8.md` / `sprint-9.md` | 教材づくりの学習ノート（壊れない教材・学習記録の設計）|
+| `docs/learning/sprint-10.md` | アジャイル編の学習ノート（保存データを壊さずにコースを足す・自分たちを教材にする）|
 
 タスク管理 API 時代の学習ノート・用語集・旧 ADR（0003 PostgreSQL / 0005 MapStruct）は
 git タグ `archive/task-api` に残っている。

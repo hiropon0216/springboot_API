@@ -2,6 +2,18 @@
 
 学習アプリ（[../index.html](../index.html)）の章は `chNN.js` に 1 章ずつ書く。方針は [ADR 0009](../../adr/0009-learning-app.md)。
 
+## コース（ADR 0010）
+
+| コース | 目次 | 章ファイル | URL | `register` |
+|---|---|---|---|---|
+| REST API 編 | `outline.js`（`window.CALC_OUTLINE`）| `chNN.js` | `#ch/3` | `course` は書かない |
+| アジャイル・スクラム編 | `agile/outline.js`（`window.AGILE_OUTLINE`）| `agile/chNN.js` | `#agile/ch/3` | `course: "agile"` |
+
+- 章番号はコースごとに 1 から。解放・合否・苦手・記録もコースごとに独立している
+- アジャイル編の「実物」はコードではなく `docs/`（spec・CLAUDE.md の DoD・progress・ADR・学習ノート）。`code()` の使い方は同じ
+- アジャイル編では **`wf:`（ウォーターフォールではこうだった）が必須**。無いと画面上部に警告が出る
+- アジャイル編の `observe` は「やってみる」という見出しで表示される（アプリを起動しない課題でよい）
+
 ## 形
 
 ```js
@@ -18,6 +30,7 @@ Calc.register({
     }
   ],
   observe: { intro: "<p>…</p>", steps: [{ do: "やること（HTML）", expect: "期待する結果" }] },
+  wf: "<p>ウォーターフォールではこうだった（HTML。アジャイル編では必須）</p>",
   ai: "<p>AI 駆動開発の観点（HTML）</p>",
   questions: [
     { q: "問題文", choices: ["正解", "誤り", "誤り", "誤り"], explain: "解説", see: "s1" }
@@ -46,9 +59,13 @@ Calc.register({
 
 図は「仕組み」を描く。名前だけを並べた箱は描かない（何が流れ、何が変わるかを示す）。
 
+部品で描けないグラフ（アジャイル編 7 章のバーンアップなど）は、`<figure class="fig"><svg>…</svg><figcaption>…</figcaption></figure>` と
+インライン SVG で書いてよい。色は `style="stroke:var(--accent)"` のように CSS の変数で指定する（属性に `var()` は効かない。ダークモードでも読めるように）。
+
 ## 約束
 
 - **`choices[0]` が正解**。表示するときにアプリが順番を混ぜる。選択肢は必ず 4 つ、重複させない
+- 正解だけが極端に長い・詳しい選択肢にしない（読まずに当てられる）。誤りの選択肢も、現場でありがちな判断として書く
 - 問題は 1 章 **15 問以上**（10 問を出題し、9 問以上で合格）。用語の暗記より「状況を与えて判断させる」問題を多くする
 - 実装がある章は、各節に最低 1 つ `refs` と `checks` を置く（実物を見ながら理解する）
 - `code(...)` の引数は**文字列リテラル**で書く（`LearningLinksTest` が正規表現で拾う）。
@@ -64,7 +81,7 @@ Calc.register({
 
 ## 章を足したら
 
-1. `index.html` の末尾に `<script src="chapters/chNN.js"></script>` を足す
+1. `index.html` の末尾に `<script src="chapters/chNN.js"></script>`（アジャイル編は `chapters/agile/chNN.js`）を足す
 2. 行番号の一覧を作り直す: `./mvnw test -Dtest=LearningLinksTest -Dlearning.writeAnchors=true`
 3. `./mvnw verify` が通ることを確認する（リンク切れ・一覧の古さ・読み込み漏れを検査する）
 4. ブラウザで開き、画面上部に赤い「章データに問題がある」が出ていないことを確認する
