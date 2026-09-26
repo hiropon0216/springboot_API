@@ -4,11 +4,17 @@ import com.example.calc.calculation.dto.CalculationRequest;
 import com.example.calc.calculation.dto.CalculationResponse;
 import com.example.calc.calculation.dto.MemoUpdateRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.net.URI;
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.web.PagedModel;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,7 +39,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * <table border="1">
  *   <caption>メソッドとステータスの対応</caption>
  *   <tr><th>操作</th><th>メソッド + パス</th><th>成功</th><th>意味</th></tr>
- *   <tr><td>一覧</td><td>GET /calculations</td><td>200</td><td>安全・冪等</td></tr>
+ *   <tr><td>一覧</td><td>GET /calculations?page=&amp;size=</td><td>200</td><td>安全・冪等</td></tr>
  *   <tr><td>取得</td><td>GET /calculations/{id}</td><td>200 / 404</td><td>安全・冪等</td></tr>
  *   <tr><td>作成</td><td>POST /calculations</td><td>201 + Location</td><td>冪等でない（叩くたび増える）</td></tr>
  *   <tr><td>全置換</td><td>PUT /calculations/{id}</td><td>200 / 404</td><td>冪等</td></tr>
@@ -49,6 +55,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequestMapping("/api/v1/calculations")
 @Tag(name = "Calculation", description = "四則演算と計算履歴")
 public class CalculationController {
+
+  /** 1 ページの最大件数。大きすぎる size で DB とメモリを圧迫させないための上限。 */
+  static final int MAX_PAGE_SIZE = 100;
+
+  /** JSON Merge Patch（RFC 7396）のメディアタイプ。 */
+  static final String MERGE_PATCH_JSON = "application/merge-patch+json";
 
   private final CalculationService service;
 
@@ -66,7 +78,7 @@ public class CalculationController {
   @Operation(summary = "計算して履歴に保存する", description = "left / operator / right を受け取り、計算結果を 1 件保存して返す")
   @ApiResponse(responseCode = "201", description = "作成成功（Location ヘッダに URL）")
   @ApiResponse(responseCode = "400", description = "入力不足 or 不正な operator or 桁数超過")
-  @ApiResponse(responseCode = "422", description = "0 除算")
+  @ApiResponse(responseCode = "422", description = "0 除算、または結果が保存できる桁数を超えた")
   public ResponseEntity<CalculationResponse> create(
       @Valid @RequestBody CalculationRequest request, UriComponentsBuilder uriBuilder) {
     // LEARN: ここに来た時点で @Valid の検証は通っている。検証に失敗していればこのメソッドは
@@ -85,23 +97,44 @@ public class CalculationController {
   }
 
   /**
-   * 履歴の一覧。
+   * 履歴の一覧（1 ページ分）。
    *
    * <p>LEARN: {@code required = false} の {@code @RequestParam} が任意の絞り込み。 {@code ?operator=ADD}
-   * を付けなければ全件。enum に無い値を送れば 400 になる。
+   * を付けなければ全件が対象。enum に無い値を送れば 400 になる。
+   *
+   * <p>LEARN: {@code page} / {@code size} に {@code @PositiveOrZero} / {@code @Min} / {@code @Max}
+   * を直接付けると、Spring MVC の<strong>メソッドバリデーション</strong>が働き、範囲外は 400 になる （{@code
+   * HandlerMethodValidationException}）。黙って丸めずに「その指定は受け付けない」と返す方が、 クライアントが誤りに気づける。
+   *
+   * <p>LEARN: Spring Data の {@code Pageable} を引数で直接受ける書き方もよく見るが、そうすると {@code ?sort=}
+   * でエンティティのフィールド名を指定できてしまう。ここでは page / size だけを受け取り、並び順はサーバーが決める。
+   *
+   * <p>LEARN: 戻り値の {@link PagedModel} は、Spring Data が「{@code Page} をそのまま JSON にしない」ために 用意した
+   * DTO。{@code {"content": [...], "page": {"size", "number", "totalElements", "totalPages"}}} という
+   * 安定した形になる。
    */
   @GetMapping
-  @Operation(summary = "履歴を一覧する", description = "新しい順。operator を指定するとその演算子だけに絞り込む")
-  @ApiResponse(responseCode = "200", description = "0 件でも 200 と空配列（404 にはしない）")
-  @ApiResponse(responseCode = "400", description = "不正な operator")
-  public List<CalculationResponse> list(@RequestParam(required = false) Operator operator) {
-    System.out.printf("[2/5 入口] 一覧要求（operator=%s）%n", operator);
-    List<CalculationResponse> responses = service.findAll(operator);
+  @Operation(summary = "履歴を一覧する", description = "新しい順に 1 ページ分。operator を指定するとその演算子だけに絞り込む")
+  @ApiResponse(responseCode = "200", description = "0 件でも 200 と空の content（404 にはしない）")
+  @ApiResponse(responseCode = "400", description = "不正な operator、または page / size が範囲外")
+  public PagedModel<CalculationResponse> list(
+      @RequestParam(required = false) Operator operator,
+      @Parameter(description = "ページ番号（0 始まり）") @RequestParam(defaultValue = "0") @PositiveOrZero
+          int page,
+      @Parameter(description = "1 ページの件数（1〜" + MAX_PAGE_SIZE + "）")
+          @RequestParam(defaultValue = "20")
+          @Min(1)
+          @Max(MAX_PAGE_SIZE)
+          int size) {
+    System.out.printf("[2/5 入口] 一覧要求（operator=%s page=%d size=%d）%n", operator, page, size);
+    Page<CalculationResponse> result = service.findAll(operator, page, size);
 
-    // LEARN: 一覧が 0 件なのは「異常」ではないので 200 + 空配列。404 は「その URL
-    // が指すリソースが無い」ときで、コレクション自体は存在している。
-    System.out.printf("[5/5 応答] 200 で返す: %d 件%n", responses.size());
-    return responses;
+    // LEARN: 一覧が 0 件なのは「異常」ではないので 200 + 空の content。404 は「その URL
+    // が指すリソースが無い」ときで、コレクション自体は存在している。最終ページより先を指定したときも同じ。
+    System.out.printf(
+        "[5/5 応答] 200 で返す: %d 件 / 全 %d 件%n",
+        result.getNumberOfElements(), result.getTotalElements());
+    return new PagedModel<>(result);
   }
 
   /**
@@ -134,7 +167,7 @@ public class CalculationController {
   @ApiResponse(responseCode = "200", description = "更新成功")
   @ApiResponse(responseCode = "400", description = "入力不足 or 不正な operator")
   @ApiResponse(responseCode = "404", description = "その id の履歴が無い")
-  @ApiResponse(responseCode = "422", description = "0 除算")
+  @ApiResponse(responseCode = "422", description = "0 除算、または結果が保存できる桁数を超えた")
   public CalculationResponse replace(
       @PathVariable Long id, @Valid @RequestBody CalculationRequest request) {
     System.out.printf("[2/5 入口] 全置換要求: id=%s%n", id);
@@ -143,12 +176,23 @@ public class CalculationController {
     return response;
   }
 
-  /** メモだけを部分更新する。 */
-  @PatchMapping("/{id}")
-  @Operation(summary = "メモだけ部分更新する", description = "式は変更しないので再計算も起きない")
+  /**
+   * メモだけを部分更新する（JSON Merge Patch）。
+   *
+   * <p>LEARN: {@code consumes} で受け付ける Content-Type を宣言する。{@code application/merge-patch+json} は RFC
+   * 7396 が定めた「この本文は Merge Patch です」という名前。普通の {@code application/json} も受け付ける （実際の API
+   * でも両方を許すのが一般的）。それ以外（{@code text/plain} など）は 415 になる。
+   */
+  @PatchMapping(
+      path = "/{id}",
+      consumes = {MediaType.APPLICATION_JSON_VALUE, MERGE_PATCH_JSON})
+  @Operation(
+      summary = "メモだけ部分更新する",
+      description = "JSON Merge Patch。memo を省略すると変更なし、null で削除。式は変更しないので再計算も起きない")
   @ApiResponse(responseCode = "200", description = "更新成功")
   @ApiResponse(responseCode = "400", description = "memo が 200 文字を超えた")
   @ApiResponse(responseCode = "404", description = "その id の履歴が無い")
+  @ApiResponse(responseCode = "415", description = "Content-Type が JSON / Merge Patch でない")
   public CalculationResponse patchMemo(
       @PathVariable Long id, @Valid @RequestBody MemoUpdateRequest request) {
     System.out.printf("[2/5 入口] 部分更新要求: id=%s memo=%s%n", id, request.memo());

@@ -12,6 +12,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 計算 1 件を表す Model クラス（JPA エンティティ）。DB の {@code calculations} テーブル 1 行に対応する。
@@ -104,7 +105,7 @@ public class Calculation {
    */
   @PrePersist
   void onCreate() {
-    Instant now = Instant.now();
+    Instant now = now();
     this.createdAt = now;
     this.updatedAt = now;
     System.out.printf(
@@ -114,8 +115,19 @@ public class Calculation {
   /** UPDATE の直前に Hibernate が呼ぶ。 */
   @PreUpdate
   void onUpdate() {
-    this.updatedAt = Instant.now();
+    this.updatedAt = now();
     System.out.printf("[4/5 保存] UPDATE する直前: id=%s%n", id);
+  }
+
+  /**
+   * 現在時刻をマイクロ秒で切り捨てたもの。
+   *
+   * <p>LEARN: {@code Instant.now()} はナノ秒まで持つことがあるが、PostgreSQL / H2 の {@code timestamp} は
+   * マイクロ秒までしか保存しない。そのままだと、作成・更新直後のレスポンスは {@code ...51.948067100Z}、 あとから GET すると {@code
+   * ...51.948067Z} と、同じリソースなのに値が変わって見える （{@code CalculationMapper} の末尾ゼロと同じ種類の問題）。DB の精度に先に揃えておく。
+   */
+  private static Instant now() {
+    return Instant.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   /**

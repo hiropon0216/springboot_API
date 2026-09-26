@@ -4,7 +4,8 @@ Spring Boot の基本を、**最小構成で一通り通す**ための学習用�
 題材は「四則演算をして、その履歴を DB に残す API」。1 リソース・1 テーブル・認証なし。
 
 > 変遷: タスク管理 API（Sprint 0〜4）→ 計算 API に作り替え（[ADR 0006](docs/adr/0006-pivot-to-calc-api.md)）
-> → Model クラスと DB 連携を組み込み（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）。
+> → Model クラスと DB 連携を組み込み（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）
+> → ページング・Merge Patch などで REST API として仕上げ（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）。
 > タスク管理 API の実装は git タグ `archive/task-api` で参照できる。
 
 ## これで学べること
@@ -21,14 +22,16 @@ Spring Boot の基本を、**最小構成で一通り通す**ための学習用�
 | DTO（`record`、request / response 分離）| [dto/](src/main/java/com/example/calc/calculation/dto/) |
 | Bean Validation（`@Valid` / `@NotNull` / `@Digits` / `@Size`）| `CalculationRequest` / `MemoUpdateRequest` |
 | **HTTP メソッドとステータス（201 + Location / 204 / 404）** | Controller の javadoc の表 |
-| 例外 → RFC 7807 ProblemDetail 一元化（400 / 404 / 422）| [GlobalExceptionHandler](src/main/java/com/example/calc/common/exception/GlobalExceptionHandler.java) |
+| **ページング（`?page=&size=`、`PagedModel`）** | `CalculationController#list` / `CalculationService#findAll` |
+| **PATCH = JSON Merge Patch（省略と null の区別）** | `MemoUpdateRequest` |
+| 例外 → RFC 7807 ProblemDetail 一元化（400 / 404 / 422 / 500）| [GlobalExceptionHandler](src/main/java/com/example/calc/common/exception/GlobalExceptionHandler.java) |
 | テスト 4 層（単体 / `@DataJpaTest` / `@WebMvcTest` / context）| [src/test/](src/test/java/com/example/calc/) |
 | OpenAPI / Swagger | `@Operation` アノテーション + [OpenApiConfig](src/main/java/com/example/calc/config/OpenApiConfig.java) |
 | CORS | [CorsConfig](src/main/java/com/example/calc/config/CorsConfig.java) |
 | ArchUnit で層を機械強制（3 層＋エンティティ非公開）| [LayeredArchitectureTest](src/test/java/com/example/calc/architecture/LayeredArchitectureTest.java) |
 
 登場しない（意図的な保留。[docs/spec.md](docs/spec.md) §6 に候補として整理）:
-ページング、1 対多のリレーション、Flyway、認証・認可、Testcontainers。
+1 対多のリレーション、Flyway、楽観ロック（ETag）、認証・認可、Testcontainers。
 
 **学習用の実行ログ**: 処理の流れを掴むため、`[1/5 受信] → [2/5 入口] → [3/5 業務] →
 [4/5 保存] → [5/5 応答]` という `System.out.printf` が各層に埋め込まれている
@@ -48,6 +51,9 @@ Claude が planner / generator / evaluator を会話の中で果たす。詳細�
   - `Calculation` エンティティ + `CalculationRepository`、REST 6 操作（201 / 204 / 404）
   - PostgreSQL 17（Docker Compose）に永続化、テストは H2、`./mvnw verify` グリーン（46 tests）
   - 実 HTTP で全操作・全エラー・再起動後のデータ残存を確認済み
+- [x] **Sprint 7: REST API としての仕上げ** — [docs/spec.md](docs/spec.md) §6 / [ADR 0008](docs/adr/0008-rest-api-finishing.md)
+  - 一覧のページング、PATCH を JSON Merge Patch に、結果の桁あふれを 422 に、500 も ProblemDetail に
+  - `./mvnw verify` グリーン（61 tests）。実 HTTP は H2 で確認（PostgreSQL では未確認）
 
 ## 開発環境
 
@@ -86,13 +92,15 @@ curl -i -XPOST http://localhost:8080/api/v1/calculations \
 # Location: http://localhost:8080/api/v1/calculations/1
 # {"id":1,"left":10,"operator":"DIVIDE","right":3,"result":3.333333333,"memo":null,...}
 
-# 一覧（新しい順）／演算子で絞り込み
+# 一覧（新しい順に 20 件ずつ）／ページ指定／演算子で絞り込み
 curl -s http://localhost:8080/api/v1/calculations
+# {"content":[{...}],"page":{"size":20,"number":0,"totalElements":1,"totalPages":1}}
+curl -s 'http://localhost:8080/api/v1/calculations?page=1&size=5'
 curl -s 'http://localhost:8080/api/v1/calculations?operator=DIVIDE'
 
-# メモだけ部分更新（PATCH）
+# メモだけ部分更新（PATCH = JSON Merge Patch。{} なら変更なし、{"memo":null} で削除）
 curl -s -XPATCH http://localhost:8080/api/v1/calculations/1 \
-  -H 'Content-Type: application/json' -d '{"memo":"monthly budget"}'
+  -H 'Content-Type: application/merge-patch+json' -d '{"memo":"monthly budget"}'
 
 # 式を全置換して再計算（PUT。memo は null に戻る）
 curl -s -XPUT http://localhost:8080/api/v1/calculations/1 \
@@ -113,7 +121,8 @@ curl -s http://localhost:8080/api/v1/calculations/999999
 
 - **Swagger UI**（`http://localhost:8080/swagger-ui.html`）が 6 操作すべてに対応している。
 - ワークスペース直下の [api-console.html](api-console.html)（`.gitignore` 済み）は
-  **まだ POST だけ**対応。CRUD 対応は今後の候補（[docs/spec.md](docs/spec.md) §6）。
+  6 操作すべてに対応（操作タブ → サンプル → 送信。作成した id は取得・更新・削除に自動で引き継ぐ）。
+  一覧の page / size、PATCH の Content-Type 切り替えもできる。
   `file://` 直開きは CORS で弾かれるので、VS Code 拡張「Live Server」で開く。
 
 ## API
@@ -122,17 +131,18 @@ curl -s http://localhost:8080/api/v1/calculations/999999
 
 | メソッド | パス | 成功 | 説明 |
 |---|---|---|---|
-| GET | `/calculations` | 200 | 履歴一覧（新しい順、`?operator=` で絞り込み）|
+| GET | `/calculations` | 200 | 履歴一覧（新しい順、`?page=&size=` でページ指定、`?operator=` で絞り込み）|
 | GET | `/calculations/{id}` | 200 | 履歴 1 件 |
 | POST | `/calculations` | 201 + `Location` | 計算して履歴に保存 |
 | PUT | `/calculations/{id}` | 200 | 式を全置換して再計算（`memo` は消える）|
-| PATCH | `/calculations/{id}` | 200 | `memo` だけ部分更新 |
+| PATCH | `/calculations/{id}` | 200 | `memo` だけ部分更新（JSON Merge Patch）|
 | DELETE | `/calculations/{id}` | 204 | 履歴 1 件を削除 |
 | GET | `/actuator/health` | 200 | ヘルスチェック（DB 接続も見る）|
 | GET | `/swagger-ui.html` | 200 | Swagger UI |
 
 `operator` は `ADD` / `SUBTRACT` / `MULTIPLY` / `DIVIDE`。
-エラーは RFC 7807 `ProblemDetail`。**入力の形が不正 = 400 / 宛先が無い = 404 / 実行できない = 422**。
+エラーは RFC 7807 `ProblemDetail`。**入力の形が不正 = 400 / 宛先が無い = 404 / 実行できない = 422 /
+サーバーのバグ = 500**。
 
 ## デプロイ（Render）
 
@@ -146,12 +156,13 @@ Render のデプロイフックを呼ぶ（`RENDER_DEPLOY_HOOK_URL` を GitHub S
 | パス | 内容 |
 |---|---|
 | `docs/brainstorm.md` | 設計合意（末尾に計算 API 化・DB 連携の変更記録）|
-| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 6 |
-| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB）|
+| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 6〜7 |
+| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ）|
 | `docs/progress.md` | 実装進捗・検証結果・引き渡し事項 |
 | `docs/learning/textbook.md` | **解説書**（IT 初心者向け・全 12 章 + 用語集）|
 | `docs/learning/curriculum.md` | **学習カリキュラム**（進め方。全 11 モジュール）|
 | `docs/learning/sprint-6.md` | Sprint 6 の学習ノート（Model / DB / REST の要点と復習問）|
+| `docs/learning/sprint-7.md` | Sprint 7 の学習ノート（ページング / Merge Patch / 500 / 桁あふれ）|
 
 タスク管理 API 時代の学習ノート・用語集・旧 ADR（0003 PostgreSQL / 0005 MapStruct）は
 git タグ `archive/task-api` に残っている。

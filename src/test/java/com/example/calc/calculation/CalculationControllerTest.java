@@ -1,28 +1,39 @@
 package com.example.calc.calculation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.calc.calculation.dto.CalculationResponse;
+import com.example.calc.calculation.dto.MemoUpdateRequest;
 import com.example.calc.common.exception.BusinessRuleException;
 import com.example.calc.common.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -67,34 +78,76 @@ class CalculationControllerTest {
         .andExpect(jsonPath("$.createdAt").exists());
   }
 
-  @Test
-  void 一覧は200で配列を返す() throws Exception {
-    when(service.findAll(null)).thenReturn(List.of(sample(2L), sample(1L)));
-
-    mvc.perform(get("/api/v1/calculations"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2))
-        .andExpect(jsonPath("$[0].id").value(2));
+  /** Service が返す 1 ページ分を作る。総件数は content より多くてよい（ほかのページにある分）。 */
+  private static Page<CalculationResponse> page(
+      List<CalculationResponse> content, int page, int size, long total) {
+    return new PageImpl<>(content, PageRequest.of(page, size), total);
   }
 
   @Test
-  void 一覧は0件でも200で空配列() throws Exception {
-    when(service.findAll(null)).thenReturn(List.of());
+  void 一覧は200でcontentとページ情報を返す() throws Exception {
+    when(service.findAll(null, 0, 20)).thenReturn(page(List.of(sample(2L), sample(1L)), 0, 20, 2));
+
+    // LEARN: PagedModel の JSON は {"content": [...], "page": {...}}。配列そのものではない。
+    mvc.perform(get("/api/v1/calculations"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.content[0].id").value(2))
+        .andExpect(jsonPath("$.page.size").value(20))
+        .andExpect(jsonPath("$.page.number").value(0))
+        .andExpect(jsonPath("$.page.totalElements").value(2))
+        .andExpect(jsonPath("$.page.totalPages").value(1));
+  }
+
+  @Test
+  void 一覧は0件でも200で空のcontent() throws Exception {
+    when(service.findAll(null, 0, 20)).thenReturn(page(List.of(), 0, 20, 0));
 
     mvc.perform(get("/api/v1/calculations"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(0));
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.page.totalElements").value(0));
+  }
+
+  @Test
+  void 一覧はpageとsizeを指定できる() throws Exception {
+    when(service.findAll(null, 2, 5)).thenReturn(page(List.of(sample(3L)), 2, 5, 11));
+
+    mvc.perform(get("/api/v1/calculations").param("page", "2").param("size", "5"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.page.number").value(2))
+        .andExpect(jsonPath("$.page.totalPages").value(3));
+
+    verify(service).findAll(null, 2, 5);
   }
 
   @Test
   void 一覧はoperatorで絞り込める() throws Exception {
-    when(service.findAll(Operator.DIVIDE)).thenReturn(List.of(sample(1L)));
+    when(service.findAll(Operator.DIVIDE, 0, 20)).thenReturn(page(List.of(sample(1L)), 0, 20, 1));
 
     mvc.perform(get("/api/v1/calculations").param("operator", "DIVIDE"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1));
+        .andExpect(jsonPath("$.content.length()").value(1));
 
-    verify(service).findAll(Operator.DIVIDE);
+    verify(service).findAll(Operator.DIVIDE, 0, 20);
+  }
+
+  @Test
+  void 一覧のsizeが上限を超えたら400でパラメータ別エラー() throws Exception {
+    // LEARN: 黙って 100 に丸めず 400 で返す。errors の形は @RequestBody の検証エラーと揃えてある。
+    mvc.perform(get("/api/v1/calculations").param("size", "101"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("入力値が不正です"))
+        .andExpect(jsonPath("$.errors.size").exists());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void 一覧のpageが負なら400() throws Exception {
+    mvc.perform(get("/api/v1/calculations").param("page", "-1"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.page").exists());
   }
 
   @Test
@@ -174,6 +227,47 @@ class CalculationControllerTest {
   }
 
   @Test
+  void 部分更新はmemoの省略とnullを区別して受け取る() throws Exception {
+    when(service.updateMemo(eq(1L), any())).thenReturn(sample(1L));
+    ArgumentCaptor<MemoUpdateRequest> captor = ArgumentCaptor.forClass(MemoUpdateRequest.class);
+
+    // LEARN: JSON Merge Patch。{} は「変更しない」、{"memo": null} は「消す」。
+    mvc.perform(
+            patch("/api/v1/calculations/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isOk());
+    mvc.perform(
+            patch("/api/v1/calculations/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"memo\":null}"))
+        .andExpect(status().isOk());
+
+    verify(service, times(2)).updateMemo(eq(1L), captor.capture());
+    MemoUpdateRequest omitted = captor.getAllValues().get(0);
+    MemoUpdateRequest nulled = captor.getAllValues().get(1);
+    assertThat(omitted.memoSpecified()).isFalse();
+    assertThat(nulled.memoSpecified()).isTrue();
+    assertThat(nulled.memo()).isNull();
+  }
+
+  @Test
+  void 部分更新はmerge_patch_jsonのContentTypeも受け付ける() throws Exception {
+    when(service.updateMemo(eq(1L), any())).thenReturn(sample(1L));
+
+    mvc.perform(
+            patch("/api/v1/calculations/1")
+                .contentType("application/merge-patch+json")
+                .content("{\"memo\":\"家計簿\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void 部分更新にJSON以外を送ると415() throws Exception {
+    mvc.perform(
+            patch("/api/v1/calculations/1").contentType(MediaType.TEXT_PLAIN).content("memo=家計簿"))
+        .andExpect(status().isUnsupportedMediaType());
+  }
+
+  @Test
   void 長すぎるメモは400() throws Exception {
     String tooLong = "あ".repeat(201);
 
@@ -241,5 +335,18 @@ class CalculationControllerTest {
         .andExpect(status().is(422))
         .andExpect(jsonPath("$.status").value(422))
         .andExpect(jsonPath("$.type").value("urn:problem-type:business-rule"));
+  }
+
+  @Test
+  void 想定外の例外は500のProblemDetailで内部情報を出さない() throws Exception {
+    when(service.findById(1L)).thenThrow(new IllegalStateException("SELECT * FROM secret_table"));
+
+    // LEARN: 500 も ProblemDetail（application/problem+json）。例外のメッセージは detail に載せない。
+    mvc.perform(get("/api/v1/calculations/1"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.status").value(500))
+        .andExpect(jsonPath("$.title").value("サーバー内部エラー"))
+        .andExpect(jsonPath("$.detail").value(not(containsString("secret_table"))));
   }
 }

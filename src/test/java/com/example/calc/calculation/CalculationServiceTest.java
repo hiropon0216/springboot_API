@@ -3,6 +3,7 @@ package com.example.calc.calculation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,8 +14,13 @@ import com.example.calc.calculation.dto.MemoUpdateRequest;
 import com.example.calc.common.exception.BusinessRuleException;
 import com.example.calc.common.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * CalculationService のロジックを、Spring も DB も起動せず確認する。
@@ -106,6 +112,80 @@ class CalculationServiceTest {
   }
 
   @Test
+  void 結果の整数部が28桁を超える足し算は422で保存もされない() {
+    // LEARN: 入力はどちらも 28 桁で @Digits を通るが、和は 29 桁。NUMERIC(38,10) に入らない。
+    String max28 = "9".repeat(28);
+
+    assertThatThrownBy(() -> result(max28, Operator.ADD, max28))
+        .isInstanceOf(BusinessRuleException.class)
+        .hasMessageContaining("大きすぎ");
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void 結果の整数部が28桁を超える掛け算も422() {
+    String e21 = "1" + "0".repeat(21);
+
+    assertThatThrownBy(() -> result(e21, Operator.MULTIPLY, e21))
+        .isInstanceOf(BusinessRuleException.class);
+  }
+
+  @Test
+  void 結果の整数部がちょうど28桁なら保存できる() {
+    String max28 = "9".repeat(28);
+
+    assertThat(result(max28, Operator.ADD, "0").toPlainString()).isEqualTo(max28);
+  }
+
+  @Test
+  void 全置換でも結果の桁あふれは422で元の式は変わらない() {
+    Calculation stored = entity("1", Operator.ADD, "1", "2");
+    when(repository.findById(1L)).thenReturn(Optional.of(stored));
+    String max28 = "9".repeat(28);
+
+    assertThatThrownBy(
+            () ->
+                service.replace(
+                    1L,
+                    new CalculationRequest(
+                        new BigDecimal(max28), Operator.ADD, new BigDecimal(max28))))
+        .isInstanceOf(BusinessRuleException.class);
+    // LEARN: 計算はエンティティを書き換える前に行うので、例外が飛んでも中身は元のまま。
+    assertThat(stored.getResult()).isEqualByComparingTo("2");
+  }
+
+  @Test
+  void 一覧は新しい順のページ指定でリポジトリに問い合わせる() {
+    when(repository.findAll(any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(entity("1", Operator.ADD, "1", "2"))));
+
+    var page = service.findAll(null, 2, 5);
+
+    ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+    verify(repository).findAll(captor.capture());
+    Pageable pageable = captor.getValue();
+    assertThat(pageable.getPageNumber()).isEqualTo(2);
+    assertThat(pageable.getPageSize()).isEqualTo(5);
+    // LEARN: 並び順はサーバーが決める（新しい順、同時刻は id の大きい順）。
+    assertThat(pageable.getSort())
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getContent().get(0).result()).isEqualByComparingTo("2");
+  }
+
+  @Test
+  void 一覧はoperator指定なら絞り込みのクエリを使う() {
+    when(repository.findByOperator(eq(Operator.DIVIDE), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    service.findAll(Operator.DIVIDE, 0, 20);
+
+    verify(repository).findByOperator(eq(Operator.DIVIDE), any(Pageable.class));
+    verify(repository, never()).findAll(any(Pageable.class));
+  }
+
+  @Test
   void 計算するとリポジトリに保存される() {
     when(repository.save(any(Calculation.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -146,11 +226,37 @@ class CalculationServiceTest {
     when(repository.findById(1L)).thenReturn(Optional.of(stored));
     stubSave();
 
-    var response = service.updateMemo(1L, new MemoUpdateRequest("家計簿の計算"));
+    var response = service.updateMemo(1L, new MemoUpdateRequest(true, "家計簿の計算"));
 
     assertThat(response.memo()).isEqualTo("家計簿の計算");
     assertThat(response.result()).isEqualByComparingTo("5");
     assertThat(response.operator()).isEqualTo(Operator.ADD);
+  }
+
+  @Test
+  void 部分更新でmemoを省略したらメモは変わらない() {
+    Calculation stored = entity("2", Operator.ADD, "3", "5");
+    stored.changeMemo("残しておく");
+    when(repository.findById(1L)).thenReturn(Optional.of(stored));
+    stubSave();
+
+    // LEARN: {} を送ったときの形。memoSpecified が false ＝「項目が無かった」。
+    var response = service.updateMemo(1L, new MemoUpdateRequest(false, null));
+
+    assertThat(response.memo()).isEqualTo("残しておく");
+  }
+
+  @Test
+  void 部分更新でmemoにnullを送ったらメモが消える() {
+    Calculation stored = entity("2", Operator.ADD, "3", "5");
+    stored.changeMemo("消す");
+    when(repository.findById(1L)).thenReturn(Optional.of(stored));
+    stubSave();
+
+    // LEARN: {"memo": null} を送ったときの形。memoSpecified が true で memo が null ＝「null を明示した」。
+    var response = service.updateMemo(1L, new MemoUpdateRequest(true, null));
+
+    assertThat(response.memo()).isNull();
   }
 
   @Test

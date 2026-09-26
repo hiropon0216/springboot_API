@@ -8,7 +8,10 @@ import com.example.calc.common.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +48,24 @@ public class CalculationService {
    */
   private static final int STORAGE_SCALE = 10;
 
+  /**
+   * 保存できる整数部の桁数。{@code NUMERIC(38, 10)} の 38 − 10 = 28 桁。
+   *
+   * <p>LEARN: 入力は {@code @Digits(integer = 28)} で入口で弾いているが、<strong>結果</strong>は 入力が 28 桁以内でも 29
+   * 桁以上になりうる（28 桁 + 28 桁、掛け算など）。入口の検証だけでは守りきれない 制約は、計算した直後に業務ルールとして確かめる。これを怠ると INSERT で DB に拒否されて
+   * 500 になる。
+   */
+  private static final int MAX_INTEGER_DIGITS = 28;
+
+  /**
+   * 一覧の並び順。新しい順、同時刻なら id の大きい順。
+   *
+   * <p>LEARN: 並び順はサーバーが決める。{@code ?sort=} をクライアントに開放すると、エンティティの フィールド名（{@code leftOperand} など）がそのまま
+   * API の仕様になり、内部表現が漏れる。
+   */
+  private static final Sort NEWEST_FIRST =
+      Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+
   private final CalculationRepository repository;
 
   CalculationService(CalculationRepository repository) {
@@ -72,20 +93,29 @@ public class CalculationService {
   }
 
   /**
-   * 履歴の一覧（GET コレクション）。新しい順。{@code operator} が指定されればその演算子だけ。
+   * 履歴の一覧（GET コレクション）を 1 ページ分。新しい順。{@code operator} が指定されればその演算子だけ。
    *
    * <p>LEARN: 一覧に絞り込み条件を足すときは、クエリパラメータ（{@code ?operator=ADD}）にする。 パス（{@code
    * /calculations/add}）にしない。パスは「リソースの場所」、クエリは「絞り込み方」。
+   *
+   * <p>LEARN: 一覧は必ずページングする。全件返すと、データが増えるほど応答が際限なく重くなる。 {@link PageRequest} は「何ページ目を・何件ずつ・どの順で」を 1
+   * つにまとめたもの（{@code page} は 0 始まり）。
+   *
+   * <p>LEARN: 戻り値は {@link Page}（Spring Data の型で、web には依存しない）。JSON 用の {@code PagedModel} に包むのは
+   * Controller の仕事。Service が HTTP の都合を知らないという原則はここでも同じ。
    */
-  public List<CalculationResponse> findAll(Operator operator) {
-    List<Calculation> found =
+  public Page<CalculationResponse> findAll(Operator operator, int page, int size) {
+    Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
+    Page<Calculation> found =
         operator == null
-            ? repository.findAllByOrderByCreatedAtDescIdDesc()
-            : repository.findByOperatorOrderByCreatedAtDescIdDesc(operator);
-    System.out.printf("[4/5 保存] SELECT 完了: %d 件（operator=%s）%n", found.size(), operator);
+            ? repository.findAll(pageable)
+            : repository.findByOperator(operator, pageable);
+    System.out.printf(
+        "[4/5 保存] SELECT 完了: %d 件 / 全 %d 件（page=%d size=%d operator=%s）%n",
+        found.getNumberOfElements(), found.getTotalElements(), page, size, operator);
 
-    // LEARN: エンティティのリストを、そのまま返さず DTO のリストに変換して返す。
-    return found.stream().map(CalculationMapper::toResponse).toList();
+    // LEARN: Page#map で中身だけエンティティ → DTO に変換する。ページ情報（総件数など）はそのまま残る。
+    return found.map(CalculationMapper::toResponse);
   }
 
   /** 履歴 1 件（GET）。無ければ 404 になる例外を投げる。 */
@@ -118,15 +148,20 @@ public class CalculationService {
   }
 
   /**
-   * メモだけ部分更新する（PATCH）。
+   * メモだけ部分更新する（PATCH）。JSON Merge Patch の意味: 書かれた項目だけ変え、null なら消す。
    *
    * <p>LEARN: PATCH は「差分だけ送る」操作。left / operator / right は触らないので再計算も起きない。 PUT
    * との違いを「送る項目の数」ではなく「意味」で押さえる: PUT = 置き換え、PATCH = 変更。
+   *
+   * <p>LEARN: {@code {}} を送られたら何も変えない。エンティティが変わっていなければ、flush しても Hibernate は UPDATE
+   * を発行しない（ダーティチェックで「変更なし」と判定される）ので、{@code updatedAt} も進まない。
    */
   @Transactional
   public CalculationResponse updateMemo(Long id, MemoUpdateRequest req) {
     Calculation entity = mustFind(id);
-    entity.changeMemo(req.memo());
+    if (req.memoSpecified()) {
+      entity.changeMemo(req.memo());
+    }
 
     // LEARN: replace と同じ理由で flush する（updatedAt を最新にしてから返す）。
     return CalculationMapper.toResponse(repository.saveAndFlush(entity));
@@ -173,6 +208,12 @@ public class CalculationService {
     // LEARN: DB のカラムに収まる桁に丸めてから保存する。表示のための末尾ゼロ落としは
     // CalculationMapper（DTO 境界）の仕事なので、ここではやらない。
     BigDecimal stored = raw.setScale(STORAGE_SCALE, RoundingMode.HALF_UP);
+
+    // LEARN: precision（全体の桁数）− scale（小数の桁数）= 整数部の桁数。
+    if (stored.precision() - stored.scale() > MAX_INTEGER_DIGITS) {
+      System.out.printf("[3/5 業務] 結果が大きすぎて保存できない → 例外を投げる: %s%n", raw);
+      throw new BusinessRuleException("計算結果が大きすぎて保存できません（整数部は " + MAX_INTEGER_DIGITS + " 桁まで）");
+    }
     System.out.printf("[3/5 業務] 結果 = %s%n", stored);
     return stored;
   }

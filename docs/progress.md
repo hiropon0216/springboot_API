@@ -1,5 +1,73 @@
 # 実装進捗
 
+## Sprint 7 — REST API としての仕上げ ✅ 実装完了（2026-09-26）
+
+「最新のポピュラーな REST API の実装を、徹底的に、それでいて必要最低限に」という要望を受けて全体を見直し、
+実 HTTP で見つかった不具合 3 件と、欠けていた定番 1 件（ページング）を入れた。
+合意は [brainstorm.md](brainstorm.md) 2026-09-26 追記 / [ADR 0008](adr/0008-rest-api-finishing.md)。
+
+### 見直しで見つかったこと（修正前に実際に叩いて確認）
+
+| # | 事象 | 対応 |
+|---|---|---|
+| 1 | 28 桁 + 28 桁の POST が **500**（H2: `Value too long for column "RESULT NUMERIC(38, 10)"`）| Service で結果の整数部を検査 → 422 |
+| 2 | その 500 が Boot 既定の `{"timestamp","status","error","path"}`（不変条件 #4 違反）| `@ExceptionHandler(Exception.class)` → 500 ProblemDetail |
+| 3 | `memo` がある状態で `PATCH {}` を送るとメモが消えた | JSON Merge Patch（省略 = 変更なし / null = 削除）|
+| 4 | 一覧が全件を配列で返す | `?page=&size=` + `PagedModel` |
+| 5 | 書き込み直後の時刻（ナノ秒）と GET の時刻（マイクロ秒）が違う（実装中に発見）| `@PrePersist` / `@PreUpdate` でマイクロ秒に切り捨て |
+
+### やったこと
+
+| 分類 | 内容 |
+|---|---|
+| Repository | 派生クエリ 2 本（`…OrderBy…`）を撤去し、`findAll(Pageable)`（継承）/ `findByOperator(Operator, Pageable)` に |
+| Service | `findAll(operator, page, size)` → `Page<CalculationResponse>`（並びは `NEWEST_FIRST` 固定）、`MAX_INTEGER_DIGITS = 28` の検査、PATCH は `memoSpecified` のときだけ変更 |
+| Controller | 一覧に `page`（`@PositiveOrZero`）/ `size`（`@Min(1)` `@Max(100)`）、戻り値 `PagedModel`。PATCH の `consumes` に `application/merge-patch+json` |
+| DTO | `MemoUpdateRequest(boolean memoSpecified, String memo)` を `@JsonCreator(DELEGATING)` で `Map` から組み立て。`memoSpecified` は OpenAPI から隠す |
+| Entity | 時刻をマイクロ秒に切り捨てる `now()` |
+| common | `handleUnexpected`（500・固定文言・`logger.error`）、`handleHandlerMethodValidationException`（`errors` にパラメータ別理由）|
+| テスト | 単体 15 → **23** / `@DataJpaTest` 6 / `@WebMvcTest` 18 → **25** / context 1 / ArchUnit 6 = **61** |
+| コンソール | `api-console.html`: 一覧に page / size、PATCH に Content-Type 切替と `{}` / null / merge-patch / 415 のサンプル、桁あふれ 422 のサンプル |
+| ドキュメント | ADR 0008 新規、brainstorm 追記、spec（§1〜§6）、README、本ファイル、`learning/sprint-7.md` |
+
+### 検証結果（実際に動かした）
+
+`./mvnw verify` グリーン（61 tests、Spotless / Checkstyle / ArchUnit 含む）。
+実 HTTP は **H2 で起動したアプリ**に対して実施（下記「検証不能」参照）。
+
+| 受け入れ基準（spec.md §5）| 結果 |
+|---|---|
+| 一覧が `{content, page}` | ✅ `"page":{"size":20,"number":0,"totalElements":6,"totalPages":1}` |
+| `?page=1&size=2` で 2 ページ目 | ✅ id 4, 3 が返り `totalPages: 3` |
+| 最終ページより先は 200 + 空 | ✅ `{"content":[],"page":{…"number":99…}}` |
+| `?size=101` / `?page=-1` が 400 + errors | ✅ `{"errors":{"size":"100 以下の値にしてください"}}` / `{"errors":{"page":"0 以上の値にしてください"}}` |
+| `?sort=leftOperand,asc` は効かない | ✅ 先頭は最新の id のまま |
+| 28 桁 + 28 桁が 422 | ✅ POST / PUT とも `urn:problem-type:business-rule`。PUT 後の GET で元の式のまま |
+| ちょうど 28 桁は保存できる | ✅ 201 |
+| `PATCH {}` で何も変わらない | ✅ `memo` も `updatedAt` もそのまま |
+| `{"memo": null}` で削除、merge-patch+json を受け付ける | ✅ 200 |
+| `text/plain` の PATCH は 415、配列の本文は 400 | ✅ |
+| 500 が ProblemDetail で内部情報なし | ✅ `@WebMvcTest` で確認（実 HTTP では 500 を起こす手段が無くなったため）|
+| 書き込み直後と GET の時刻が同じ | ✅ `createdAt` が両方 `…10.518571Z` |
+| OpenAPI | ✅ `page`（min 0）/ `size`（1〜100）、PATCH は 2 つの Content-Type、`MemoUpdateRequest` は `memo`（nullable）のみ |
+
+### 検証不能・未実施
+
+- **PostgreSQL での実 HTTP 確認は未実施**。Docker デーモンが起動しておらず（`DockerNotRunningException`）、
+  H2 に差し替えて起動した。ページングの `LIMIT/OFFSET`・`COUNT(*)` と `NUMERIC(38,10)` の境界は
+  PostgreSQL でも同じ挙動のはずだが、確認はしていない。
+- `api-console.html` はスクリプトの構文チェック（`node --check`）のみ。**ブラウザでの画面操作は未確認**。
+
+### 引き渡し事項
+
+- **破壊的変更**: 一覧のレスポンスが**配列 → `{content, page}`**。`?page=&size=` の範囲外は 400。
+- **挙動の変更**: `PATCH {}` はメモを消さなくなった（消すには `{"memo": null}`）。
+- 422 の原因が 2 つになった（0 除算・結果の桁あふれ）。
+- 並び順はサーバー固定。`?sort=` を開放する場合は、API 名 → フィールド名の対応表を持つこと（ADR 0008）。
+- `git tag sprint-7` とコミットは未実施。
+
+---
+
 ## Sprint 6 — Model クラスと DB 連携 ✅ 実装完了（2026-09-25）
 
 計算 API に Model クラス（JPA エンティティ）と DB 連携を組み込み、REST の 6 操作を持つ 1 リソースにした。
@@ -71,8 +139,11 @@ PostgreSQL 17（Docker Compose）に対して実 HTTP で確認。
 
 - **破壊的変更**: POST の成功が 200 → **201 + `Location`**、入力に桁数制約（`@Digits`）追加。
   既存クライアント（`api-console.html` を含む）は 200 前提なら直す必要がある。
-- `api-console.html` は **POST だけ**対応のまま（`.gitignore` 済み・未コミット）。
-  6 操作に対応させるのは今後の候補。当面は Swagger UI が全操作をカバーする。
+- `api-console.html` を 6 操作に対応させた（2026-09-26。`.gitignore` 済み・未コミット）。
+  201 の `Location` をブラウザから読めるよう `CorsConfig` に `exposedHeaders("Location")` を追加。
+  検証: `./mvnw verify` グリーン（46 件）。Docker が起動していなかったため PostgreSQL ではなく
+  H2 でアプリを起動し、`Origin` 付き curl で 6 操作・プリフライト・`Access-Control-Expose-Headers` を確認。
+  **ブラウザ上での画面操作は未確認**。
 - スキーマは `ddl-auto: update` に任せている。**列の削除・リネーム・型変更はできない**ので、
   そうした変更が必要になったら先に Flyway を入れる（[spec.md](spec.md) §6）。
 - テストだけ H2 という割り切りをしている。DB 固有の SQL（ネイティブクエリ・`jsonb` など）を

@@ -3,10 +3,12 @@ package com.example.calc.calculation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -30,6 +32,10 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class CalculationRepositoryTest {
 
+  /** Service と同じ並び順（新しい順、同時刻は id の大きい順）。 */
+  private static final Sort NEWEST_FIRST =
+      Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+
   @Autowired CalculationRepository repository;
 
   private Calculation save(String left, Operator operator, String right, String result) {
@@ -50,6 +56,8 @@ class CalculationRepositoryTest {
     assertThat(saved.getId()).isNotNull();
     assertThat(saved.getCreatedAt()).isNotNull();
     assertThat(saved.getUpdatedAt()).isNotNull();
+    // LEARN: DB の timestamp の精度（マイクロ秒）に揃っている＝読み戻しても値が変わらない。
+    assertThat(saved.getCreatedAt().getNano() % 1_000).isZero();
   }
 
   @Test
@@ -67,16 +75,22 @@ class CalculationRepositoryTest {
   }
 
   @Test
-  void 一覧は新しい順に返る() {
+  void 一覧は新しい順に1ページ分だけ返り総件数も分かる() {
     save("1", Operator.ADD, "1", "2");
     save("2", Operator.ADD, "2", "4");
     save("3", Operator.ADD, "3", "6");
 
-    List<Calculation> all = repository.findAllByOrderByCreatedAtDescIdDesc();
+    // LEARN: 2 件ずつに区切った 0 ページ目。SQL は LIMIT 付きの SELECT と COUNT(*) の 2 本が飛ぶ。
+    Page<Calculation> first = repository.findAll(PageRequest.of(0, 2, NEWEST_FIRST));
 
-    assertThat(all).hasSize(3);
-    assertThat(all.get(0).getResult()).isEqualByComparingTo("6");
-    assertThat(all.get(2).getResult()).isEqualByComparingTo("2");
+    assertThat(first.getContent()).hasSize(2);
+    assertThat(first.getContent().get(0).getResult()).isEqualByComparingTo("6");
+    assertThat(first.getTotalElements()).isEqualTo(3);
+    assertThat(first.getTotalPages()).isEqualTo(2);
+
+    Page<Calculation> second = repository.findAll(PageRequest.of(1, 2, NEWEST_FIRST));
+    assertThat(second.getContent()).hasSize(1);
+    assertThat(second.getContent().get(0).getResult()).isEqualByComparingTo("2");
   }
 
   @Test
@@ -85,11 +99,12 @@ class CalculationRepositoryTest {
     save("6", Operator.DIVIDE, "3", "2");
     save("2", Operator.MULTIPLY, "3", "6");
 
-    List<Calculation> divides =
-        repository.findByOperatorOrderByCreatedAtDescIdDesc(Operator.DIVIDE);
+    Page<Calculation> divides =
+        repository.findByOperator(Operator.DIVIDE, PageRequest.of(0, 20, NEWEST_FIRST));
 
-    assertThat(divides).hasSize(1);
-    assertThat(divides.get(0).getOperator()).isEqualTo(Operator.DIVIDE);
+    assertThat(divides.getContent()).hasSize(1);
+    assertThat(divides.getContent().get(0).getOperator()).isEqualTo(Operator.DIVIDE);
+    assertThat(divides.getTotalElements()).isEqualTo(1);
   }
 
   @Test

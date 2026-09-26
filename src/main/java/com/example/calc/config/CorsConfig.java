@@ -35,6 +35,9 @@ public class CorsConfig implements WebMvcConfigurer {
             "https://*.claude.site")
         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .allowedHeaders("*")
+        // LEARN: 別オリジンの JS が読めるレスポンスヘッダは既定で Content-Type など数種だけ。
+        // 201 の Location をブラウザ（api-console.html）から読むには明示的に公開する必要がある。
+        .exposedHeaders("Location")
         .allowCredentials(false)
         // LEARN: プリフライト結果をブラウザがキャッシュする秒数。毎回 OPTIONS が飛ぶのを抑える。
         .maxAge(3600);
