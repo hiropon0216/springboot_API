@@ -20,7 +20,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * すべてのエラー応答を RFC 7807 {@link ProblemDetail} に統一する。
+ * すべてのエラー応答を RFC 9457（旧 RFC 7807）の {@link ProblemDetail} に統一する。
  *
  * <p>LEARN: エラーの「形」をここ 1 か所で決める。Controller や Service は例外を投げるだけで、 HTTP ステータスや JSON の組み立ては一切やらない。だから
  * Service を Web 以外から呼んでも壊れず、 エラー応答の仕様変更もこのファイルだけで済む。

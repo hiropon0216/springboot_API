@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
  *
  * <pre>./mvnw test -Dtest=LearningLinksTest -Dlearning.writeAnchors=true</pre>
  *
- * <p>目印の行の決め方: Java ファイルではコメント以外の行を優先し、無ければコメント行（javadoc の表など）を使う。 それ以外のファイルは最初に見つかった行。
+ * <p>目印の行の決め方: コメント以外の行を優先し、無ければコメント行（javadoc の表など）を使う。 コメントとみなすのは Java の * // /* と、YAML・Dockerfile
+ * の #。
  */
 class LearningLinksTest {
 
@@ -49,7 +50,10 @@ class LearningLinksTest {
     List<String> errors = new ArrayList<>();
     for (Ref ref : collectRefs()) {
       Path file = Path.of(ref.path());
-      if (!Files.isRegularFile(file)) {
+      if (ref.anchor().contains("\\")) {
+        // LEARN: "…\"…" のようにエスケープすると、正規表現が目印を途中で切ってしまう。' で囲む約束（AUTHORING.md）。
+        errors.add(ref.chapterFile() + ": 目印に \\ を使っている（' で囲んで書く）→ " + ref.anchor());
+      } else if (!Files.isRegularFile(file)) {
         errors.add(ref.chapterFile() + ": ファイルが無い → " + ref.path());
       } else if (resolveLine(file, ref.anchor()) < 0) {
         errors.add(ref.chapterFile() + ": 目印が見つからない → " + ref.path() + " 「" + ref.anchor() + "」");
@@ -107,7 +111,6 @@ class LearningLinksTest {
   /** 目印の行番号（1 始まり）。見つからなければ -1。 */
   private static int resolveLine(Path file, String anchor) throws IOException {
     List<String> lines = read(file).lines().toList();
-    boolean java = file.toString().endsWith(".java");
     int firstAny = -1;
     for (int i = 0; i < lines.size(); i++) {
       String line = lines.get(i);
@@ -117,16 +120,24 @@ class LearningLinksTest {
       if (firstAny < 0) {
         firstAny = i + 1;
       }
-      if (!java || !isComment(line)) {
+      if (!isComment(file, line)) {
         return i + 1;
       }
     }
     return firstAny;
   }
 
-  private static boolean isComment(String line) {
+  /** コメント行か。Java は * // /*、YAML と Dockerfile は #（Markdown の # は見出しなので対象外）。 */
+  private static boolean isComment(Path file, String line) {
+    String name = file.getFileName().toString();
     String t = line.strip();
-    return t.startsWith("*") || t.startsWith("//") || t.startsWith("/*");
+    if (name.endsWith(".java")) {
+      return t.startsWith("*") || t.startsWith("//") || t.startsWith("/*");
+    }
+    if (name.endsWith(".yml") || name.endsWith(".yaml") || name.equals("Dockerfile")) {
+      return t.startsWith("#");
+    }
+    return false;
   }
 
   private static String renderAnchors() throws IOException {

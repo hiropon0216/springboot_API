@@ -3,6 +3,7 @@
 - 題材変更の合意: [docs/brainstorm.md](brainstorm.md) 2026-09-11 追記 / [ADR 0006](adr/0006-pivot-to-calc-api.md)
 - Model / DB 連携の追加: [docs/brainstorm.md](brainstorm.md) 2026-09-25 追記 / [ADR 0007](adr/0007-reintroduce-model-and-database.md)
 - REST API としての仕上げ: [docs/brainstorm.md](brainstorm.md) 2026-09-26 追記 / [ADR 0008](adr/0008-rest-api-finishing.md)
+- 学習アプリ（教科書 ＆ 問題集）: [docs/brainstorm.md](brainstorm.md) 2026-09-26 追記 / [ADR 0009](adr/0009-learning-app.md)（§6 Sprint 8・9）
 - 旧「タスク管理 API 仕様（Sprint 0〜4）」は git タグ `archive/task-api` の同ファイルを参照。
 
 ---
@@ -40,7 +41,7 @@
 
 ## 3. API
 
-ベースパス `/api/v1`。認証なし。エラーは全て RFC 7807 `ProblemDetail`。
+ベースパス `/api/v1`。認証なし。エラーは全て RFC 9457（旧 RFC 7807）`ProblemDetail`。
 
 ### 3.1 一覧: `GET /api/v1/calculations`
 
@@ -138,11 +139,11 @@
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| GET | `/actuator/health` | ヘルスチェック（DB 接続も見る。`{"status":"UP"}`）|
+| GET | `/actuator/health` | ヘルスチェック（DB 接続も見る。`{"groups":["liveness","readiness"],"status":"UP"}`。詳細は出さない）|
 | GET | `/swagger-ui.html` | Swagger UI |
 | GET | `/v3/api-docs` | OpenAPI JSON |
 
-## 4. エラー（RFC 7807 ProblemDetail）
+## 4. エラー（RFC 9457 ProblemDetail）
 
 | 状況 | HTTP | `type` | 補足 |
 |---|---|---|---|
@@ -260,9 +261,29 @@
 - [ ] 章ファイル中のリンク先ファイル・目印を 1 つ壊すと `./mvnw verify` が赤くなる
 - [ ] 390px 幅（スマホ）でも読める
 
+### Sprint 9 — 学習アプリ 全章 ＋ 学習記録 ✅（ブラウザでの目視確認は利用者に依頼）
+
+合意: [ADR 0009](adr/0009-learning-app.md)、2026-09-26 の追加合意（学習記録 A ＋ B）。API の実装は変えない。
+
+含むもの:
+- 第 2〜7 部（5〜26 章）。各章 15 問以上、全節に図、実装がある章は全節に実物へのリンクと「確認すること」
+- 学習記録: 受験の記録（章・点数・日時）と問題ごとの正誤を localStorage に保存。
+  **間違えた問題を優先して出題**し、「間違えた問題だけ復習」できる（復習は合否に影響しない）
+- 進捗の書き出し（JSON ファイル）と読み込み
+- `textbook.md` / `curriculum.md` の削除（ADR 0009）
+
+受け入れ基準:
+- [ ] 26 章すべてが開け、章データの自己検査に問題が出ない。各章 15 問以上
+- [ ] `./mvnw verify` がグリーン（全リンクが実在し、行番号の一覧が最新）
+- [ ] 間違えた問題が次の出題で優先され、「間違えた問題だけ復習」で出題される。復習では合否・最高点が変わらない
+- [ ] ホームに受験の記録（直近）と、苦手な問題の数が出る
+- [ ] 書き出した JSON を読み込むと、合否・最高点・記録が復元される。壊れたファイルでは何も変わらずエラーを表示する
+
 ### 今後の候補（未着手・任意）
 
-- 学習アプリ 第 2〜7 部（5〜26 章。ADR 0009 の章立て）と、`textbook.md` / `curriculum.md` の削除
+- **学習アプリ「アジャイル・スクラム編」**（9 章・コース切り替え。Sprint 9 完了後に着手。合意は
+  [brainstorm.md](brainstorm.md) 2026-09-26、着手時に ADR 0010）
+- 学習記録を API（DB）に保存する演習（2 つ目のリソース。ADR が必要）
 - **Flyway によるスキーマ版管理**（`ddl-auto: validate` に切り替える）
 - **1 対多のリレーション**（タグ / フォルダ、`@ManyToOne`、JOIN、N+1 と `@EntityGraph`）
 - **Testcontainers** で本物の PostgreSQL に対してテストする
@@ -276,5 +297,5 @@
 2. package-by-feature: `calculation` ＋ 横断の `common` / `config`
 3. 内部表現をそのまま公開しない: API 入出力は Java `record` の DTO。エンティティを
    Controller に登場させず、変換は `CalculationMapper` に閉じる
-4. エラー応答は RFC 7807 `ProblemDetail` に統一（`common` のカスタム例外 → `@RestControllerAdvice`）
+4. エラー応答は RFC 9457 `ProblemDetail` に統一（`common` のカスタム例外 → `@RestControllerAdvice`）
 5. トランザクション境界は Service に置く（Controller / Repository には置かない）

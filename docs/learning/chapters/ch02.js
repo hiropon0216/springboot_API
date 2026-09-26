@@ -47,8 +47,8 @@ ${Fig.code([
 ${Fig.timeline([
   { t: "見て回る", d: "com.example.calc の下を探し、@RestController / @Service / @Repository などの付箋が付いたクラスを集める", tone: "accent" },
   { t: "部品を作る", d: "集めたクラスのオブジェクト（Bean ＝ 部品）を作る", tone: "accent" },
-  { t: "部品をつなぐ", d: "Controller に Service を、Service に Repository を渡す ← DI（3 節）", tone: "lec" },
-  { t: "自動設定", d: "pom.xml に入っている部品を見て、DB 接続などを準備する ← 5 節", tone: "warn" },
+  { t: "部品をつなぐ", d: "Controller に Service を、Service に Repository を渡す ← DI（2.3 節）", tone: "lec" },
+  { t: "自動設定", d: "pom.xml に入っている部品を見て、DB 接続などを準備する ← 2.5 節", tone: "warn" },
   { t: "窓口を開く", d: "8080 番で HTTP の待ち受けを始める。ログに「Tomcat started on port 8080」", tone: "ok" }
 ])}`,
       refs: [
@@ -153,12 +153,12 @@ ${Fig.cards([
   { ic: "🏷️", t: "scope", d: "test ＝ テストの時だけ／runtime ＝ 実行時だけ。H2 は test なので本番に入らない", tone: "warn" }
 ], "pom.xml ＝ 部品表。application.yml（実行時の設定）とは役割が違う")}
 ${Fig.flow([
-  { ic: "📥", t: "部品を集める", s: "インターネットから" },
+  { ic: "📏", t: "規約チェック", s: "Checkstyle" },
   { ic: "🔨", t: "コンパイル" },
   { ic: "🧪", t: "テスト", s: "64 件" },
-  { ic: "📏", t: "検査", s: "書式・構造" },
-  { ic: "📦", t: "jar", s: "実行ファイル", tone: "ok" }
-], ["", "", "", ""], { compact: true, caption: "./mvnw verify 1 回で全部走る（第 21 章）。mvnw は Maven を入れていない PC でも同じ版の Maven を使うための起動スクリプト" })}`,
+  { ic: "📦", t: "jar", s: "実行ファイル", tone: "ok" },
+  { ic: "🎨", t: "書式チェック", s: "Spotless" }
+], ["", "", "", ""], { compact: true, caption: "./mvnw verify 1 回でこの順に全部走る（第 21 章）。部品は最初にインターネットから集める。mvnw は Maven を入れていない PC でも同じ版の Maven を使うための起動スクリプト" })}`,
       refs: [
         code("pom.xml", "spring-boot-starter-parent", "バージョンをまとめて管理する親"),
         code("pom.xml", "<scope>test</scope>", "テストの時だけ使う部品の印（最初の 1 つ）")
@@ -177,11 +177,11 @@ ${Fig.flow([
           "… Tomcat started on port 8080 (http) with context path '/'",
           "… Started CalcApiApplication in 4.2 seconds"
         ]),
-        expect: "2 節の図の「自動設定（DB 接続の準備 ＝ HikariPool）」と「窓口を開く（Tomcat started）」のログが出る" },
+        expect: "2.2 節の図の「自動設定（DB 接続の準備 ＝ HikariPool）」と「窓口を開く（Tomcat started）」のログが出る" },
       { do: "起動ログの中から「Hikari」や「PostgreSQL」を含む行を探す。",
         expect: "HikariPool（DB 接続の準備）が動いている。自分では接続のコードを 1 行も書いていないのに、自動設定で準備されている" },
       { do: "<code>./mvnw verify</code> を実行する（Docker は不要）。",
-        expect: "最後に BUILD SUCCESS。テストでは H2 に切り替わるので Docker が無くても通る（5 節のプロファイル）" }
+        expect: "最後に BUILD SUCCESS。テストでは H2 に切り替わるので Docker が無くても通る（2.5 節のプロファイル）" }
     ]
   },
   ai: `

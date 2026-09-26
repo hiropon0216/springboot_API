@@ -5,7 +5,8 @@ Spring Boot の基本を、**最小構成で一通り通す**ための学習用�
 
 > 変遷: タスク管理 API（Sprint 0〜4）→ 計算 API に作り替え（[ADR 0006](docs/adr/0006-pivot-to-calc-api.md)）
 > → Model クラスと DB 連携を組み込み（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）
-> → ページング・Merge Patch などで REST API として仕上げ（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）。
+> → ページング・Merge Patch などで REST API として仕上げ（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）
+> → この API を題材にした教科書 ＆ 問題集アプリ（[ADR 0009](docs/adr/0009-learning-app.md)）。
 > タスク管理 API の実装は git タグ `archive/task-api` で参照できる。
 
 ## これで学べること
@@ -24,7 +25,7 @@ Spring Boot の基本を、**最小構成で一通り通す**ための学習用�
 | **HTTP メソッドとステータス（201 + Location / 204 / 404）** | Controller の javadoc の表 |
 | **ページング（`?page=&size=`、`PagedModel`）** | `CalculationController#list` / `CalculationService#findAll` |
 | **PATCH = JSON Merge Patch（省略と null の区別）** | `MemoUpdateRequest` |
-| 例外 → RFC 7807 ProblemDetail 一元化（400 / 404 / 422 / 500）| [GlobalExceptionHandler](src/main/java/com/example/calc/common/exception/GlobalExceptionHandler.java) |
+| 例外 → RFC 9457（旧 RFC 7807）ProblemDetail 一元化（400 / 404 / 422 / 500）| [GlobalExceptionHandler](src/main/java/com/example/calc/common/exception/GlobalExceptionHandler.java) |
 | テスト 4 層（単体 / `@DataJpaTest` / `@WebMvcTest` / context）| [src/test/](src/test/java/com/example/calc/) |
 | OpenAPI / Swagger | `@Operation` アノテーション + [OpenApiConfig](src/main/java/com/example/calc/config/OpenApiConfig.java) |
 | CORS | [CorsConfig](src/main/java/com/example/calc/config/CorsConfig.java) |
@@ -55,8 +56,11 @@ Claude が planner / generator / evaluator を会話の中で果たす。詳細�
   - 一覧のページング、PATCH を JSON Merge Patch に、結果の桁あふれを 422 に、500 も ProblemDetail に
   - `./mvnw verify` グリーン（61 tests）。実 HTTP は H2 で確認（PostgreSQL では未確認）
 - [x] **Sprint 8: 学習アプリの骨格 ＋ 第 1 部** — [ADR 0009](docs/adr/0009-learning-app.md)
-  - [docs/learning/index.html](docs/learning/index.html) をブラウザで開く（教科書 ＆ 問題集。1〜4 章、全 26 章の予定）
+  - [docs/learning/index.html](docs/learning/index.html) をブラウザで開く（教科書 ＆ 問題集）
   - `./mvnw verify` グリーン（64 tests。教材のリンク切れも検査する）
+- [x] **Sprint 9: 学習アプリ 全章 ＋ 学習記録** — [ADR 0009](docs/adr/0009-learning-app.md)
+  - 全 26 章・424 問・図 306 個（座学の章：外部 API・N+1・認証認可・API セキュリティ など）
+  - 間違えた問題を優先して出題、「間違えた問題だけ復習」、進捗の書き出し・読み込み
 
 ## 開発環境
 
@@ -144,7 +148,7 @@ curl -s http://localhost:8080/api/v1/calculations/999999
 | GET | `/swagger-ui.html` | 200 | Swagger UI |
 
 `operator` は `ADD` / `SUBTRACT` / `MULTIPLY` / `DIVIDE`。
-エラーは RFC 7807 `ProblemDetail`。**入力の形が不正 = 400 / 宛先が無い = 404 / 実行できない = 422 /
+エラーは RFC 9457 `ProblemDetail`。**入力の形が不正 = 400 / 宛先が無い = 404 / 実行できない = 422 /
 サーバーのバグ = 500**。
 
 ## デプロイ（Render）
@@ -158,15 +162,15 @@ Render のデプロイフックを呼ぶ（`RENDER_DEPLOY_HOOK_URL` を GitHub S
 
 | パス | 内容 |
 |---|---|
-| `docs/brainstorm.md` | 設計合意（末尾に計算 API 化・DB 連携の変更記録）|
-| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 6〜7 |
+| `docs/brainstorm.md` | 設計合意の記録（計算 API 化・DB 連携・REST の仕上げ・学習アプリ・アジャイル編の計画）|
+| `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 5〜9・今後の候補 |
 | `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ / `0009` 学習アプリ）|
 | `docs/progress.md` | 実装進捗・検証結果・引き渡し事項 |
-| `docs/learning/index.html` | **教科書 ＆ 問題集アプリ**（ブラウザで開く。章末 4 択で 9 割以上なら次の章へ。作成中）|
-| `docs/learning/textbook.md` | 旧解説書（Sprint 5 時点で古い。学習アプリが揃ったら削除）|
-| `docs/learning/curriculum.md` | 旧カリキュラム（同上）|
+| `docs/learning/index.html` | **教科書 ＆ 問題集アプリ**（ブラウザで開く。全 26 章・424 問。章末 4 択で 9 割以上なら次の章へ。間違えた問題の復習・進捗の書き出しつき）|
+| `docs/learning/chapters/AUTHORING.md` | 章の書き方と図の部品（教材を直す・足すとき）|
 | `docs/learning/sprint-6.md` | Sprint 6 の学習ノート（Model / DB / REST の要点と復習問）|
 | `docs/learning/sprint-7.md` | Sprint 7 の学習ノート（ページング / Merge Patch / 500 / 桁あふれ）|
+| `docs/learning/sprint-8.md` / `sprint-9.md` | 教材づくりの学習ノート（壊れない教材・学習記録の設計）|
 
 タスク管理 API 時代の学習ノート・用語集・旧 ADR（0003 PostgreSQL / 0005 MapStruct）は
 git タグ `archive/task-api` に残っている。

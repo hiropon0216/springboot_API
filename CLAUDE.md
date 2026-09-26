@@ -5,6 +5,8 @@ Spring Boot による API の基本を、**最小構成で一通り復習する*
 
 > 以前はタスク管理 API だった。2026-09-11 に計算 API へ作り替え（[ADR 0006](docs/adr/0006-pivot-to-calc-api.md)）、
 > 2026-09-25 に Model クラスと DB 連携を組み込んだ（[ADR 0007](docs/adr/0007-reintroduce-model-and-database.md)）。
+> 2026-09-26 に REST API として仕上げ（[ADR 0008](docs/adr/0008-rest-api-finishing.md)）、
+> この API を題材にした学習アプリ `docs/learning/` を作った（[ADR 0009](docs/adr/0009-learning-app.md)）。
 > 旧実装は git タグ `archive/task-api`（コミット `cfa1efd`）。
 
 ## このプロジェクトでの進め方（重要）
@@ -33,6 +35,7 @@ Spring Boot による API の基本を、**最小構成で一通り復習する*
 - 検証（モード B: CLI・API 実行 が主）:
   - `./mvnw spring-boot:run` でアプリ起動（`docker compose up` は自動で走る）
   - `./mvnw verify` でテスト（単体・`@DataJpaTest`・`@WebMvcTest`・context 起動）+ Spotless + Checkstyle + ArchUnit
+    + 学習アプリのリンク検査（`LearningLinksTest`。コードを変えて教材のリンクが切れたり行がずれたりすると赤くなる）
   - `curl` / Swagger UI（`/swagger-ui.html`）でエンドポイント確認
   - `GET /actuator/health` が `UP`（DB 接続も見ている）
   - DB の中身は `docker compose exec postgres psql -U calc -d calc -c 'select * from calculations;'`
@@ -49,7 +52,7 @@ CI（ArchUnit / Checkstyle / Spotless）でも強制する。破る変更は入�
 3. **内部表現をそのまま公開しない**: API の入出力は必ず Java `record` の DTO。
    リクエスト用（`XxxRequest`）とレスポンス用（`XxxResponse`）を分ける。
    **エンティティを Controller に登場させない**（変換は `XxxMapper` に閉じる）。
-4. **エラー応答は RFC 7807 `ProblemDetail` に統一**: `common/exception` のカスタム例外を投げ、
+4. **エラー応答は RFC 9457（旧 RFC 7807）`ProblemDetail` に統一**: `common/exception` のカスタム例外を投げ、
    `@RestControllerAdvice`（`GlobalExceptionHandler`）で変換。Controller / Service は
    ステータスコードや JSON を組み立てない。
 5. **トランザクション境界は Service**: クラスに `@Transactional(readOnly = true)`、書き込みメソッドに
@@ -106,3 +109,5 @@ DB を持たない機能なら 2 を飛ばす（「すべての機能に DB が�
 - CI: GitHub Actions（`./mvnw verify`。テストは H2 なので DB サービス不要）
   / CD: Render へ Docker デプロイ（Web Service + PostgreSQL）
 - CORS は `WebMvcConfigurer`（Security が無いので MVC 層で完結）
+- 学習アプリ（教科書 ＆ 問題集）は `docs/learning/index.html` ＋ `chapters/chNN.js`（[ADR 0009](docs/adr/0009-learning-app.md)）。
+  書き方は `docs/learning/chapters/AUTHORING.md`。実装を変えたら、関係する章の本文も読み直す

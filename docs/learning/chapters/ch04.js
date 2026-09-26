@@ -36,7 +36,7 @@ Calc.register({
       title: "全体の地図：1 コマずつたどる",
       body: `
 <p><code>POST /api/v1/calculations</code> に <code>{"left":2,"operator":"ADD","right":3}</code> を送ったときの旅を、
-<b>「次へ」で 1 コマずつ</b>進めてみよう。右側のログは、実際にアプリを動かしたときにターミナルに出るもの。</p>
+<b>「次へ」で 1 コマずつ</b>進めてみよう。黒い枠のログは、実際にアプリを動かしたときにターミナルに出るもの。</p>
 ${Fig.stepper({
   nodes: CH04_NODES,
   scenarios: [{

@@ -364,6 +364,13 @@
   <label for="repoPath">リポジトリの場所（「VS Code で開く」に使う）</label>
   <input type="text" id="repoPath" class="mono" spellcheck="false">
   <p class="hint">例: <code>C:/git/springboot_API</code>。VS Code がインストールされている必要がある。</p>
+  <label>進捗の書き出し・読み込み（別の PC に移す・バックアップする）</label>
+  <div class="row" style="justify-content:flex-start;margin-top:0">
+    <button class="ghost" id="exportBtn" type="button">書き出す（JSON）</button>
+    <button class="ghost" id="importBtn" type="button">読み込む</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+  <p class="hint" id="ioMsg" aria-live="polite"></p>
   <div class="row">
     <button class="danger" id="resetBtn" type="button">進捗をリセット</button>
     <span style="flex:1"></span>
@@ -568,13 +575,32 @@ function validateChapter(ch) {
 
 // ===== 進捗の保存（localStorage が使えなくても動く） ======================
 const STORE_KEY = "calcLearning.v1";
-let state = { passed: {}, best: {}, repo: DEFAULT_REPO };
+// passed: 章の合否 / best: 章の最高点 / attempts: 受験の記録 / qstats: 問題ごとの正誤 / repo: リポジトリの場所
+const EMPTY_STATE = () => ({ passed: {}, best: {}, attempts: [], qstats: {}, repo: DEFAULT_REPO });
+const MAX_ATTEMPTS = 300;
+let state = EMPTY_STATE();
 try {
   const raw = localStorage.getItem(STORE_KEY);
-  if (raw) state = Object.assign(state, JSON.parse(raw));
+  if (raw) state = Object.assign(EMPTY_STATE(), JSON.parse(raw));
 } catch (e) {}
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+// 問題の識別子。章番号 ＋ 問題文のハッシュ（問題の順番を入れ替えても記録がずれない。問題文を直すと別の問題扱い）
+function qid(no, q) {
+  let h = 5381;
+  for (let i = 0; i < q.q.length; i++) h = ((h << 5) + h + q.q.charCodeAt(i)) >>> 0;
+  return no + ":" + h.toString(36);
+}
+// 「苦手」＝ 最後に解いたとき間違えた問題
+function weakQuestions(no) {
+  const ch = Calc.chapters[no];
+  if (!ch) return [];
+  return ch.questions.filter(q => { const s = state.qstats[qid(no, q)]; return s && s.last === false; });
+}
+function weakCountAll() {
+  return outlineChapters().reduce((n, o) => n + weakQuestions(o.no).length, 0);
 }
 
 // ===== 章の状態 =========================================================
@@ -664,11 +690,37 @@ function renderHome() {
     '<div class="bar"><div style="width:' + (passed / all.length * 100) + '%"></div></div>' +
     (next ? '<p><button type="button" onclick="location.hash=\'#ch/' + next.no + '\'">続きから：第 ' + next.no + " 章 " + escapeHtml(next.title) + "</button></p>" :
       "<p>公開済みの章はすべて合格した。</p>") +
+    renderWeakSummary() + renderHistory() +
     '<div class="note"><b>はじめに</b><br>' +
     "・「VS Code で開く」は VS Code が必要。リポジトリの場所が違う場合は右上の「設定」で変える。<br>" +
     "・「動かして観察」ではアプリを起動する（<code>./mvnw spring-boot:run</code>、Docker が必要）。" +
     "ワークスペース直下の <code>api-console.html</code> を Live Server で開くと、画面から API を叩ける。<br>" +
-    "・進捗はこのブラウザに保存される（別のブラウザや端末とは共有されない）。</div>";
+    "・進捗はこのブラウザに保存される（別のブラウザや端末とは共有されない）。別の PC に移すときや、" +
+    "閲覧データを消す前は、右上の「設定」から書き出しておく。</div>";
+}
+
+// 苦手な問題（最後に間違えた問題）の章ごとの数
+function renderWeakSummary() {
+  const rows = outlineChapters().map(o => ({ o, n: weakQuestions(o.no).length })).filter(r => r.n > 0);
+  if (!rows.length) return "";
+  return "<h3>苦手な問題（最後に間違えた問題）</h3>" +
+    Fig.cards(rows.map(r => ({ t: "第 " + r.o.no + " 章　" + r.n + " 問",
+      d: escapeHtml(r.o.title) + '<br><a href="#ch/' + r.o.no + '/review">間違えた問題だけ復習する →</a>', tone: "warn" })),
+      "合計 " + weakCountAll() + " 問。章末テストでも、間違えた問題ほど優先して出題される");
+}
+
+// 受験の記録（直近 10 件）
+function renderHistory() {
+  if (!state.attempts.length) return "";
+  const fmt = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, "0");
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
+  const recent = state.attempts.slice(-10).reverse();
+  return "<h3>学習の記録</h3>" + Fig.matrix("日時", ["章", "点", "結果"], recent.map(a => ({
+    h: fmt(a.at),
+    c: ["第 " + a.no + " 章",
+      a.score + " / " + a.total,
+      a.mode === "review" ? { v: "復習", tone: "lec" } : a.score >= Math.ceil(a.total * PASS_RATIO) ? { v: "合格", tone: "ok" } : { v: "不合格", tone: "err" }]
+  })), "直近 10 件（全 " + state.attempts.length + " 件）");
 }
 
 function renderLocked(no) {
@@ -709,7 +761,10 @@ function renderChapter(no) {
   const need = Math.ceil(Math.min(QUIZ_SIZE, ch.questions.length) * PASS_RATIO);
   html += '<div class="quiz-cta"><p>章末テスト：' + ch.questions.length + " 問のプールから " + Math.min(QUIZ_SIZE, ch.questions.length) +
     " 問を出題。" + need + " 問以上で合格" + (Calc.chapters[no + 1] ? "し、次の章が開く" : "") + "。</p>" +
-    '<button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button></div>';
+    '<div class="actions"><button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button>' +
+    (weakQuestions(no).length ? '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '/review\'">間違えた問題だけ復習する（' +
+      weakQuestions(no).length + " 問）</button>" : "") + "</div>" +
+    (weakQuestions(no).length ? '<p style="margin-top:10px">章末テストでは、間違えた問題ほど優先して出題される。復習は合否・最高点に影響しない。</p>' : "") + "</div>";
   view.innerHTML = html;
   hydrateRefs(view);
   hydrateSteppers(view);
@@ -721,12 +776,27 @@ function shuffle(a) {
   for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
   return b;
 }
-function startQuiz(no) {
+// 出題の重み。まだ解いていない問題と、最後に間違えた問題ほど選ばれやすい
+function questionWeight(no, q) {
+  const s = state.qstats[qid(no, q)];
+  if (!s) return 2;
+  return 1 + (s.last === false ? 4 : 0) + 2 * (s.wrong / Math.max(1, s.seen));
+}
+// 重み付きの抽選（重複なし）。Efraimidis–Spirakis 法: 各問に random^(1/重み) の鍵を付け、大きい順に取る
+function weightedPick(no, questions, n) {
+  return questions
+    .map(q => ({ q, key: Math.pow(Math.random(), 1 / questionWeight(no, q)) }))
+    .sort((a, b) => b.key - a.key)
+    .slice(0, n)
+    .map(x => x.q);
+}
+function startQuiz(no, mode) {
   const ch = Calc.chapters[no];
-  const picked = shuffle(ch.questions).slice(0, QUIZ_SIZE);
+  const picked = mode === "review" ? shuffle(weakQuestions(no)).slice(0, QUIZ_SIZE) : weightedPick(no, ch.questions, QUIZ_SIZE);
   quiz = {
-    no,
+    no, mode: mode || "normal",
     items: picked.map(q => ({
+      id: qid(no, q),
       q: q.q, explain: q.explain, see: q.see, refs: q.refs,
       // 章ファイルでは choices[0] が正解。表示順はここで混ぜる
       choices: shuffle(q.choices.map((text, i) => ({ text, correct: i === 0 })))
@@ -735,25 +805,36 @@ function startQuiz(no) {
     submitted: false
   };
 }
-function renderQuiz(no) {
-  if (!quiz || quiz.no !== no) startQuiz(no);
+function renderQuiz(no, mode) {
+  mode = mode || "normal";
+  if (!quiz || quiz.no !== no || quiz.mode !== mode) startQuiz(no, mode);
   const ch = Calc.chapters[no];
   const m = meta(no);
+  const review = quiz.mode === "review";
+  let html = '<div class="crumb"><a href="#ch/' + no + '">← 第 ' + no + " 章 " + escapeHtml(m.title) + " に戻る</a></div>" +
+    '<h2 class="ch-title">' + (review ? "間違えた問題の復習" : "章末テスト") + "</h2>";
+  if (!quiz.items.length) {
+    view.innerHTML = html + '<div class="result pass"><div class="score">🎉</div><div>この章に、最後に間違えた問題は無い。</div>' +
+      '<div class="actions"><button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button></div></div>';
+    return;
+  }
   const need = Math.ceil(quiz.items.length * PASS_RATIO);
   const score = quiz.items.filter((it, i) => quiz.answers[i] != null && it.choices[quiz.answers[i]].correct).length;
-  let html = '<div class="crumb"><a href="#ch/' + no + '">← 第 ' + no + " 章 " + escapeHtml(m.title) + " に戻る</a></div>" +
-    '<h2 class="ch-title">章末テスト</h2>';
   if (quiz.submitted) {
     const pass = score >= need;
-    html += '<div class="result ' + (pass ? "pass" : "fail") + '"><div class="score">' + score + " / " + quiz.items.length + "</div>" +
-      "<div>" + (pass ? "合格！" + (Calc.chapters[no + 1] ? "第 " + (no + 1) + " 章が開いた。" : "") :
+    const again = review ? (weakQuestions(no).length ? "まだ間違えている問題で復習する（" + weakQuestions(no).length + " 問）" : "") : "新しい 10 問で解き直す";
+    html += '<div class="result ' + (review || pass ? "pass" : "fail") + '"><div class="score">' + score + " / " + quiz.items.length + "</div>" +
+      "<div>" + (review ? (weakQuestions(no).length ? "正解した問題は苦手リストから外れた。" : "苦手な問題が無くなった！") + "（復習は合否に影響しない）" :
+        pass ? "合格！" + (Calc.chapters[no + 1] ? "第 " + (no + 1) + " 章が開いた。" : "") :
         "不合格（" + need + " 問以上で合格）。解説と本文を見直して、もう一度。") + "</div>" +
-      '<div class="actions"><button type="button" id="retry" class="ghost">新しい 10 問で解き直す</button>' +
+      '<div class="actions">' + (again ? '<button type="button" id="retry" class="ghost">' + again + "</button>" : "") +
+      (!review && weakQuestions(no).length ? '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '/review\'">間違えた問題だけ復習する</button>' : "") +
       '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '\'">本文に戻る</button>' +
-      (pass && Calc.chapters[no + 1] ? '<button type="button" onclick="location.hash=\'#ch/' + (no + 1) + '\'">第 ' + (no + 1) + " 章へ進む</button>" : "") +
+      (!review && pass && Calc.chapters[no + 1] ? '<button type="button" onclick="location.hash=\'#ch/' + (no + 1) + '\'">第 ' + (no + 1) + " 章へ進む</button>" : "") +
       "</div></div>";
   } else {
-    html += '<p style="color:var(--dim)">' + quiz.items.length + " 問すべてに答えてから採点する。" + need + " 問以上で合格。</p>";
+    html += '<p style="color:var(--dim)">' + quiz.items.length + " 問すべてに答えてから採点する。" +
+      (review ? "最後に間違えた問題だけを出題している。合否・最高点には影響しない。" : need + " 問以上で合格。") + "</p>";
   }
   quiz.items.forEach((it, i) => {
     const ans = quiz.answers[i];
@@ -792,16 +873,28 @@ function renderQuiz(no) {
   const submit = $("submitQuiz");
   if (submit) submit.addEventListener("click", () => {
     quiz.submitted = true;
+    const now = new Date().toISOString();
+    // 問題ごとの正誤を記録する（seen: 解いた回数 / wrong: 間違えた回数 / last: 最後の正誤）
+    quiz.items.forEach((it, i) => {
+      const ok = it.choices[quiz.answers[i]].correct;
+      const st = state.qstats[it.id] || { seen: 0, wrong: 0 };
+      st.seen++; if (!ok) st.wrong++; st.last = ok; st.at = now;
+      state.qstats[it.id] = st;
+    });
     const s = quiz.items.filter((it, i) => it.choices[quiz.answers[i]].correct).length;
-    state.best[no] = Math.max(state.best[no] || 0, s);
-    if (s >= need) state.passed[no] = true;
+    if (!review) {
+      state.best[no] = Math.max(state.best[no] || 0, s);
+      if (s >= need) state.passed[no] = true;
+    }
+    state.attempts.push({ no, score: s, total: quiz.items.length, mode: quiz.mode, at: now });
+    if (state.attempts.length > MAX_ATTEMPTS) state.attempts = state.attempts.slice(-MAX_ATTEMPTS);
     save();
     renderToc(no);
-    renderQuiz(no);
+    renderQuiz(no, quiz.mode);
     window.scrollTo(0, 0);
   });
   const retry = $("retry");
-  if (retry) retry.addEventListener("click", () => { quiz = null; renderQuiz(no); window.scrollTo(0, 0); });
+  if (retry) retry.addEventListener("click", () => { const md = quiz.mode; quiz = null; renderQuiz(no, md); window.scrollTo(0, 0); });
 }
 
 // ===== ルーティング（#ch/3 / #ch/3/s2 / #ch/3/quiz） =====================
@@ -811,7 +904,10 @@ function route() {
   renderToc(no);
   if (!no) { renderHome(); window.scrollTo(0, 0); return; }
   if (!meta(no) || status(no) === "locked" || status(no) === "draft") { renderLocked(no); window.scrollTo(0, 0); return; }
-  if (m[2] === "quiz") { renderQuiz(no); window.scrollTo(0, 0); }
+  if (m[2] === "quiz" || m[2] === "review") {
+    if (quiz && quiz.submitted) quiz = null; // 採点後に戻ってきたら新しく出題する
+    renderQuiz(no, m[2] === "review" ? "review" : "normal"); window.scrollTo(0, 0);
+  }
   else {
     if (quiz && quiz.no === no && quiz.submitted) quiz = null;
     renderChapter(no);
@@ -829,9 +925,50 @@ $("settingsSave").addEventListener("click", () => {
   save(); $("settings").close(); route();
 });
 $("resetBtn").addEventListener("click", () => {
-  if (!confirm("すべての章の合格記録と最高点を消す。よい？")) return;
-  state.passed = {}; state.best = {}; quiz = null;
+  if (!confirm("すべての章の合格記録・最高点・学習の記録を消す。よい？（先に書き出しておくと戻せる）")) return;
+  const repo = state.repo;
+  state = EMPTY_STATE(); state.repo = repo; quiz = null;
   save(); $("settings").close(); location.hash = ""; route();
+});
+
+// 書き出し: 進捗を JSON ファイルとして保存させる
+function exportData() {
+  return JSON.stringify({ app: "calc-learning", version: 1, exportedAt: new Date().toISOString(), state }, null, 2);
+}
+// 読み込み: 形を確かめてから置き換える。壊れていたら何も変えない
+function importData(text) {
+  let data;
+  try { data = JSON.parse(text); } catch (e) { return "JSON として読めない。書き出したファイルを選んでいるか確認して。"; }
+  const s = data && data.app === "calc-learning" && data.state;
+  const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+  if (!s || !isObj(s.passed) || !isObj(s.best) || !Array.isArray(s.attempts || []) || !isObj(s.qstats || {})) {
+    return "このアプリの進捗ファイルではない（形が違う）。何も変更していない。";
+  }
+  state = Object.assign(EMPTY_STATE(), s, { repo: state.repo });
+  quiz = null;
+  save();
+  return null;
+}
+$("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([exportData()], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "calc-learning-progress-" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $("ioMsg").textContent = "書き出した（ダウンロードフォルダを確認）。";
+});
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", () => {
+  const file = $("importFile").files[0];
+  if (!file) return;
+  file.text().then(text => {
+    const err = importData(text);
+    $("importFile").value = "";
+    if (err) { $("ioMsg").textContent = "⚠ " + err; return; }
+    $("ioMsg").textContent = "読み込んだ（合格 " + Object.keys(state.passed).length + " 章・記録 " + state.attempts.length + " 件）。";
+    route();
+  });
 });
 </script>
 
@@ -841,6 +978,28 @@ $("resetBtn").addEventListener("click", () => {
 <script src="chapters/ch02.js"></script>
 <script src="chapters/ch03.js"></script>
 <script src="chapters/ch04.js"></script>
+<script src="chapters/ch05.js"></script>
+<script src="chapters/ch06.js"></script>
+<script src="chapters/ch07.js"></script>
+<script src="chapters/ch08.js"></script>
+<script src="chapters/ch09.js"></script>
+<script src="chapters/ch10.js"></script>
+<script src="chapters/ch11.js"></script>
+<script src="chapters/ch12.js"></script>
+<script src="chapters/ch13.js"></script>
+<script src="chapters/ch14.js"></script>
+<script src="chapters/ch15.js"></script>
+<script src="chapters/ch16.js"></script>
+<script src="chapters/ch17.js"></script>
+<script src="chapters/ch18.js"></script>
+<script src="chapters/ch19.js"></script>
+<script src="chapters/ch20.js"></script>
+<script src="chapters/ch21.js"></script>
+<script src="chapters/ch22.js"></script>
+<script src="chapters/ch23.js"></script>
+<script src="chapters/ch24.js"></script>
+<script src="chapters/ch25.js"></script>
+<script src="chapters/ch26.js"></script>
 
 <script>
 if (Calc.problems.length) {

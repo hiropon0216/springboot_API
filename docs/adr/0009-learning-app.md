@@ -5,7 +5,7 @@
 
 ## 背景
 
-既存の [textbook.md](../learning/textbook.md)（12 章）と [curriculum.md](../learning/curriculum.md) は Sprint 5 時点
+既存の `docs/learning/textbook.md`（12 章）と `docs/learning/curriculum.md`（Sprint 9 で削除。git の履歴には残る）は Sprint 5 時点
 （DB なし・POST が 200）の内容で、Sprint 6〜7 の実装と食い違っている。また読むだけの資料で、
 理解度を確かめる仕組みが無い。
 
