@@ -1,0 +1,67 @@
+# 章ファイルの書き方
+
+学習アプリ（[../index.html](../index.html)）の章は `chNN.js` に 1 章ずつ書く。方針は [ADR 0009](../../adr/0009-learning-app.md)。
+
+## 形
+
+```js
+Calc.register({
+  no: 5,                         // 章番号（outline.js と一致させる）
+  goal: ["この章のゴール", ...],
+  sections: [
+    {
+      id: "s1",                  // 節の id（問題の see から参照する）
+      title: "節の見出し",
+      body: `<p>本文（HTML）。${code("path", "目印")} のように文中にリンクも置ける</p>`,
+      refs: [code("リポジトリからのパス", "目印の文字列", "説明（任意）")],
+      checks: [{ q: "実物を開いて確かめる問い", a: "答え" }]
+    }
+  ],
+  observe: { intro: "<p>…</p>", steps: [{ do: "やること（HTML）", expect: "期待する結果" }] },
+  ai: "<p>AI 駆動開発の観点（HTML）</p>",
+  questions: [
+    { q: "問題文", choices: ["正解", "誤り", "誤り", "誤り"], explain: "解説", see: "s1" }
+  ]
+});
+```
+
+## 図の部品（`Fig.*`）
+
+**文字だけの節を作らない**。1 つの節に最低 1 つは図を置き、文章は図の補足にとどめる。
+本文のテンプレート文字列の中で `${Fig.flow(...)}` のように使う。`tone` は `"accent"` `"ok"` `"warn"` `"err"` `"lec"` `"dim"`。
+
+| 部品 | 向いている場面 | 例 |
+|---|---|---|
+| `Fig.flow(nodes, edges, {dir, compact, caption})` | 何がどこへ流れるか（箱と矢印）。`edges` に `{f:"行き", b:"帰り"}` で往復 | 1 章のレストランのたとえ |
+| `Fig.http(title, rows, caption)` | HTTP メッセージや URL を欄ごとに色分けして分解 | 1 章のリクエスト |
+| `Fig.cards(items, caption)` | 並列の概念（アイコン＋見出し＋説明） | 1 章のステータスの 3 分類 |
+| `Fig.compare(a, b, caption)` | 良い例／悪い例、本番／テストなどの比較 | 2 章の本番とテスト |
+| `Fig.stack(layers, caption)` | 積み重なった層 | 2 章の氷山 |
+| `Fig.pairs(左見出し, 右見出し, rows, caption, 記号)` | 左右の対応（色で対応を示す）。片方が無いときは `null` | 1 章の JSON と Java の型 |
+| `Fig.matrix(隅, 列, rows, caption)` | 色付きの表（○×表、対応表） | 1 章の URL × メソッド |
+| `Fig.term(lines, caption)` | ログやコマンド（`[n/5 …]` は色分け、`$ ` はコマンド） | 4 章のログ |
+| `Fig.timeline(steps, caption)` | 順番のある手順 | 2 章の起動の流れ |
+| `Fig.code(lines, caption)` | 実物のコードの要所に注釈を付ける（`@` の語は色付け） | 3 章の PUT の引数 |
+| `Fig.stepper({nodes, scenarios})` | 1 コマずつ進める対話型の図。シナリオを切り替えられる | 4 章のリクエストの旅 |
+
+図は「仕組み」を描く。名前だけを並べた箱は描かない（何が流れ、何が変わるかを示す）。
+
+## 約束
+
+- **`choices[0]` が正解**。表示するときにアプリが順番を混ぜる。選択肢は必ず 4 つ、重複させない
+- 問題は 1 章 **15 問以上**（10 問を出題し、9 問以上で合格）。用語の暗記より「状況を与えて判断させる」問題を多くする
+- 実装がある章は、各節に最低 1 つ `refs` と `checks` を置く（実物を見ながら理解する）
+- `code(...)` の引数は**文字列リテラル**で書く（`LearningLinksTest` が正規表現で拾う）。
+  目印に `"` を含めたいときは `'…'` で囲む
+- 目印は、そのファイルの中で目的の行を指せる文字列にする。Java ファイルではコメント以外の行が優先される
+- 本文・選択肢は HTML として表示される。`<` `>` を文字として出すときは `&lt;` `&gt;` と書く
+- `api-console.html` はリポジトリに入っていない（`.gitignore`）ので `code()` でリンクしない
+
+## 章を足したら
+
+1. `index.html` の末尾に `<script src="chapters/chNN.js"></script>` を足す
+2. 行番号の一覧を作り直す: `./mvnw test -Dtest=LearningLinksTest -Dlearning.writeAnchors=true`
+3. `./mvnw verify` が通ることを確認する（リンク切れ・一覧の古さ・読み込み漏れを検査する）
+4. ブラウザで開き、画面上部に赤い「章データに問題がある」が出ていないことを確認する
+
+コードを変えて目印が消えたり行がずれたりしたときも、2 → 3 をやる。

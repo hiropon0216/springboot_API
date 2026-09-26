@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>計算 API で学ぶ REST API</title>
+<!--
+  教科書 ＆ 問題集アプリ（ADR 0009）。外部ライブラリなし。file:// で直接開いて動く。
+
+  構成:
+    index.html            … このファイル。画面と動き（章の解放・出題・採点・進捗）
+    chapters/outline.js   … 全 26 章の目次
+    chapters/anchors.js   … コードへのリンクの行番号（自動生成。LearningLinksTest が検査する）
+    chapters/chNN.js      … 章ごとの本文と問題（書き方は chapters/AUTHORING.md）
+
+  新しい章を足したら、下の <script src="chapters/chNN.js"> を 1 行足す。
+-->
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --dim: #5c6672; --faint: #8a939d;
+    --line: #dfe3e8; --accent: #2f6feb; --accent-ink: #ffffff; --accent-soft: #e8f0fe;
+    --code: #f2f4f7;
+    --ok: #18794e; --ok-bg: #e8f5ee; --warn: #9a5b00; --warn-bg: #fdf3e2;
+    --err: #b42318; --err-bg: #fdeceb; --lec: #6941c6; --lec-bg: #f1ecfd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171a; --panel: #1c2024; --ink: #e7ebef; --dim: #9aa5b1; --faint: #6f7a86;
+      --line: #2c3239; --accent: #6ea1ff; --accent-ink: #0d1117; --accent-soft: #1d2a40;
+      --code: #24292f;
+      --ok: #6ee7a8; --ok-bg: #143324; --warn: #f0c07a; --warn-bg: #33280f;
+      --err: #ff9d95; --err-bg: #3a1c1a; --lec: #c4b0ff; --lec-bg: #2a2140;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 16px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, system-ui, sans-serif;
+    font-size: 15px; line-height: 1.8;
+  }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  :not(pre) > code { background: var(--code); padding: 1px 5px; border-radius: 4px; word-break: break-word; }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin: 8px 0; overflow-x: auto; line-height: 1.55; white-space: pre-wrap; word-break: break-all;
+  }
+  button {
+    font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  }
+  button.ghost { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  /* ===== 骨格 ===== */
+  header.top {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5;
+  }
+  header.top h1 { font-size: 16px; margin: 0; flex: 1; }
+  header.top h1 a { color: inherit; text-decoration: none; }
+  header.top .prog { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  header.top button { padding: 5px 10px; font-size: 13px; }
+  .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); max-width: 1200px; margin: 0 auto; }
+  nav.toc { padding: 16px 12px 40px; border-right: 1px solid var(--line); position: sticky; top: 49px;
+            align-self: start; max-height: calc(100vh - 49px); overflow-y: auto; }
+  main { padding: 24px 32px 80px; min-width: 0; }
+  .article { max-width: 760px; }
+
+  /* 目次 */
+  .toc summary.toc-head { display: none; }
+  .toc .part { font-size: 11px; letter-spacing: .08em; color: var(--dim); font-weight: 700; margin: 16px 8px 4px; }
+  .toc .part:first-of-type { margin-top: 0; }
+  .toc a.ch {
+    display: flex; gap: 8px; align-items: baseline; padding: 5px 8px; border-radius: 6px;
+    color: var(--ink); text-decoration: none; font-size: 13px; line-height: 1.5;
+  }
+  .toc a.ch:hover { background: var(--code); }
+  .toc a.ch.current { background: var(--accent-soft); font-weight: 600; }
+  .toc a.ch .st { width: 16px; flex: none; text-align: center; font-size: 12px; }
+  .toc a.ch.locked, .toc a.ch.draft { color: var(--faint); }
+  .st-passed { color: var(--ok); }
+  .st-open { color: var(--accent); }
+
+  /* 本文 */
+  .crumb { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  h2.ch-title { font-size: 24px; line-height: 1.4; margin: 0 0 8px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+           vertical-align: middle; margin-left: 6px; letter-spacing: .04em; }
+  .badge.impl { background: var(--accent-soft); color: var(--accent); }
+  .badge.lecture { background: var(--lec-bg); color: var(--lec); }
+  .badge.mixed { background: var(--warn-bg); color: var(--warn); }
+  .badge.summary { background: var(--code); color: var(--dim); }
+  .goal { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+          border-radius: 8px; padding: 12px 16px; margin: 16px 0 24px; }
+  .goal b { display: block; font-size: 12px; color: var(--dim); letter-spacing: .06em; }
+  .goal ul { margin: 4px 0 0; padding-left: 20px; }
+  section.sec { margin: 36px 0; }
+  section.sec > h3 { font-size: 19px; line-height: 1.45; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  section.sec h4 { font-size: 15px; margin: 18px 0 4px; }
+  .sec table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 10px 0; display: block; overflow-x: auto; }
+  .sec th, .sec td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  .sec th { background: var(--code); font-weight: 600; white-space: nowrap; }
+  .figure { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+  .figure pre { background: transparent; border: 0; padding: 0; margin: 0; font-size: 12.5px; }
+  .note { background: var(--warn-bg); color: var(--ink); border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+  .note b:first-child { color: var(--warn); }
+
+  /* コードへのリンク */
+  .refs { margin: 14px 0; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .refs > .label { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: .06em; }
+  .ref { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 2px 0; font-size: 13px; }
+  .refs .ref { display: flex; padding: 6px 0; border-top: 1px dashed var(--line); }
+  .refs .ref:first-of-type { border-top: 0; }
+  .ref .file { font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
+  .ref .anchor { color: var(--dim); font-size: 12px; word-break: break-all; }
+  .ref .desc { flex-basis: 100%; color: var(--dim); font-size: 13px; }
+  .ref a.open { font-size: 12px; font-weight: 600; text-decoration: none; padding: 1px 8px; border-radius: 6px;
+                border: 1px solid var(--line); background: var(--code); white-space: nowrap; }
+  .ref a.open:hover { border-color: var(--accent); }
+  .ref .broken { color: var(--err); font-size: 12px; }
+  p .ref, li .ref, td .ref { display: inline-flex; }
+
+  /* 確認すること */
+  .checks { margin: 14px 0; padding: 12px 14px; background: var(--accent-soft); border-radius: 8px; }
+  .checks > .label { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .06em; }
+  .checks details { margin: 6px 0; }
+  .checks summary { cursor: pointer; }
+  .checks details > div { margin: 4px 0 8px 18px; padding: 8px 12px; background: var(--panel); border-radius: 6px; font-size: 14px; }
+
+  /* 動かして観察・AI */
+  .box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 16px 18px; margin: 36px 0; }
+  .box > h3 { margin: 0 0 8px; font-size: 18px; }
+  .box ol { padding-left: 22px; }
+  .box li { margin: 10px 0; }
+  .expect { font-size: 13px; color: var(--dim); margin-top: 2px; }
+  .box.ai { border-left: 4px solid var(--lec); }
+
+  /* テスト */
+  .quiz-cta { text-align: center; margin: 40px 0 0; padding: 24px 16px; border: 2px dashed var(--line); border-radius: 12px; }
+  .quiz-cta p { color: var(--dim); margin: 0 0 12px; font-size: 14px; }
+  .q { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .q .qtext { font-weight: 600; margin-bottom: 8px; }
+  .q .qno { color: var(--dim); margin-right: 6px; }
+  .q label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line);
+             border-radius: 8px; margin: 6px 0; cursor: pointer; font-size: 14px; line-height: 1.6; }
+  .q label:hover { border-color: var(--accent); }
+  .q input { margin-top: 5px; flex: none; }
+  .q.done label { cursor: default; }
+  .q label.correct { border-color: var(--ok); background: var(--ok-bg); }
+  .q label.wrong { border-color: var(--err); background: var(--err-bg); }
+  .q .explain { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--code); font-size: 14px; }
+  .q .verdict { font-weight: 700; }
+  .q .verdict.ok { color: var(--ok); } .q .verdict.ng { color: var(--err); }
+  .result { border-radius: 12px; padding: 18px; margin: 8px 0 20px; text-align: center; }
+  .result.pass { background: var(--ok-bg); } .result.fail { background: var(--err-bg); }
+  .result .score { font-size: 32px; font-weight: 800; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 12px; }
+  .sticky-submit { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 30%); padding: 20px 0 12px; text-align: center; }
+
+  /* ホーム */
+  .hero h2 { font-size: 26px; margin: 0 0 8px; line-height: 1.4; }
+  .hero p { color: var(--dim); }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 20px 0; }
+  .steps div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; }
+  .steps b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .bar { height: 8px; background: var(--code); border-radius: 999px; overflow: hidden; margin: 6px 0 16px; }
+  .bar > div { height: 100%; background: var(--ok); }
+  .locked-view { text-align: center; padding: 60px 16px; color: var(--dim); }
+  .locked-view .big { font-size: 40px; }
+
+  .devwarn { background: var(--err-bg); color: var(--err); padding: 10px 16px; font-size: 13px; }
+  .devwarn ul { margin: 4px 0 0; }
+
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100% - 32px); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 4px; }
+  dialog input[type=text] { width: 100%; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  dialog .hint { font-size: 12px; color: var(--dim); margin: 4px 0 0; }
+  dialog .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+  button.danger { background: transparent; color: var(--err); border-color: var(--err); }
+
+  /* ===== 図の部品（Fig.*）===== */
+  figure.fig { margin: 18px 0; }
+  figure.fig > figcaption { font-size: 13px; color: var(--dim); margin-top: 8px; text-align: center; }
+  .t-accent { --tc: var(--accent); --tb: var(--accent-soft); }
+  .t-ok { --tc: var(--ok); --tb: var(--ok-bg); }
+  .t-warn { --tc: var(--warn); --tb: var(--warn-bg); }
+  .t-err { --tc: var(--err); --tb: var(--err-bg); }
+  .t-lec { --tc: var(--lec); --tb: var(--lec-bg); }
+  .t-dim { --tc: var(--dim); --tb: var(--code); }
+
+  /* フロー図 */
+  .flow { display: flex; align-items: stretch; }
+  .flow .node {
+    flex: 1 1 0; min-width: 0; background: var(--tb, var(--panel)); border: 2px solid var(--tc, var(--line));
+    border-radius: 12px; padding: 10px 12px; text-align: center; display: flex; flex-direction: column;
+    justify-content: center; gap: 2px; transition: box-shadow .2s, opacity .2s, transform .2s;
+  }
+  .flow .node .ic { font-size: 26px; line-height: 1.2; }
+  .flow .node b { font-size: 14px; line-height: 1.35; }
+  .flow .node span { font-size: 12px; color: var(--dim); line-height: 1.45; }
+  .flow .node.active { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent); transform: scale(1.03); }
+  .flow .node.faded { opacity: .38; }
+  .flow .edge { flex: 0 0 92px; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 0 4px; }
+  .arrow { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--dim); line-height: 1.3; text-align: center; }
+  .arrow .ln { width: 100%; height: 2px; background: var(--ink); position: relative; opacity: .75; }
+  .arrow.f .ln::after, .arrow.b .ln::before { content: ""; position: absolute; top: -5px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+  .arrow.f .ln::after { right: -2px; border-left: 9px solid var(--ink); }
+  .arrow.b .ln::before { left: -2px; border-right: 9px solid var(--ink); }
+  .arrow.b { flex-direction: column-reverse; }
+  .flow.compact .edge { flex-basis: 30px; padding: 0; }
+  .flow.compact .node { padding: 8px 6px; }
+  .flow.compact .node b { font-size: 13px; }
+  .flow.compact .node .ic { font-size: 20px; }
+  .flow.v { flex-direction: column; max-width: 460px; margin-left: auto; margin-right: auto; }
+  .flow.v .edge { flex: 0 0 auto; flex-direction: row; justify-content: center; padding: 4px 0; gap: 18px; min-height: 46px; }
+  .flow.v .arrow { flex-direction: row; gap: 8px; text-align: left; }
+  .flow.v .arrow .ln { width: 2px; height: 38px; }
+  .flow.v .arrow.f .ln::after { right: auto; top: auto; bottom: -2px; left: -5px; border: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--ink); }
+  .flow.v .arrow.b .ln::before { left: -5px; top: -2px; border: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 9px solid var(--ink); }
+  .flow.v .arrow.b { flex-direction: row; }
+
+  /* HTTP メッセージ */
+  .http { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  .http .ht { font-size: 12px; font-weight: 700; letter-spacing: .06em; padding: 6px 12px; background: var(--code); color: var(--dim); }
+  .hrow { display: grid; grid-template-columns: 112px minmax(0, 1fr) 180px; align-items: center; border-top: 1px solid var(--line); }
+  .hrow .hk { align-self: stretch; display: flex; align-items: center; padding: 8px 10px; font-size: 12px; font-weight: 700; color: var(--tc); background: var(--tb); border-right: 4px solid var(--tc); }
+  .hrow .hv { padding: 8px 12px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+  .hrow .hn { padding: 8px 12px; font-size: 12px; color: var(--dim); }
+
+  /* カード */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--tc, var(--line)); border-radius: 10px; padding: 12px; }
+  .card .ic { font-size: 28px; line-height: 1.2; }
+  .card b { display: block; font-size: 14px; margin: 4px 0 2px; }
+  .card span { font-size: 12.5px; color: var(--dim); line-height: 1.55; display: block; }
+
+  /* 比較 */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cmp { border: 2px solid var(--tc, var(--line)); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  .cmp > .ch { background: var(--tb, var(--code)); color: var(--tc, var(--ink)); font-weight: 700; font-size: 14px; padding: 8px 12px; }
+  .cmp > .cb { padding: 10px 12px; font-size: 14px; }
+  .cmp > .cb pre { margin: 6px 0; }
+
+  /* 積み重ね（層） */
+  .stack { display: flex; flex-direction: column; gap: 6px; }
+  .layer { display: flex; align-items: center; gap: 12px; border-radius: 10px; padding: 10px 14px; background: var(--tb, var(--code)); border: 2px solid var(--tc, var(--line)); }
+  .layer b { font-size: 14px; min-width: 7em; }
+  .layer span { font-size: 13px; color: var(--dim); }
+
+  /* 対応表（左右の色を揃える） */
+  .pairs { display: grid; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); gap: 6px 0; align-items: center; }
+  .pairs .ph { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: .05em; text-align: center; padding-bottom: 2px; }
+  .pairs .pc { background: var(--tb, var(--code)); border: 2px solid var(--tc, var(--line)); border-radius: 8px; padding: 6px 10px; font-size: 13px; min-height: 36px; display: flex; flex-direction: column; justify-content: center; }
+  .pairs .pc small { color: var(--dim); font-size: 11.5px; }
+  .pairs .pc.empty { background: transparent; border-style: dashed; color: var(--faint); }
+  .pairs .pm { text-align: center; color: var(--dim); font-size: 16px; }
+
+  /* 表（色付きセル） */
+  .matrix { display: grid; gap: 4px; font-size: 13px; overflow-x: auto; }
+  .matrix > div { padding: 7px 8px; border-radius: 6px; text-align: center; background: var(--tb, transparent); color: var(--tc, var(--ink)); font-weight: 600; }
+  .matrix > .mh { background: var(--code); color: var(--dim); font-size: 12px; font-weight: 700; }
+  .matrix > .mr { text-align: left; background: var(--code); color: var(--ink); }
+  .matrix > .mc0 { background: transparent; }
+
+  /* ターミナル（常に暗い背景） */
+  .term { background: #0d1117; color: #d1d7e0; border-radius: 10px; padding: 12px 14px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.7; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .term .p1 { color: #79c0ff; } .term .p2 { color: #d2a8ff; } .term .p3 { color: #ffa657; } .term .p4 { color: #7ee787; } .term .p5 { color: #ff7b72; }
+  .term .sql { color: #8b949e; } .term .cmd { color: #e6edf3; } .term .cmd::before { content: "$ "; color: #7ee787; }
+
+  /* タイムライン */
+  .timeline { list-style: none; padding: 0; margin: 0; position: relative; }
+  .timeline li { position: relative; padding: 0 0 16px 44px; }
+  .timeline li::before { content: ""; position: absolute; left: 15px; top: 30px; bottom: 0; width: 2px; background: var(--line); }
+  .timeline li:last-child::before { display: none; }
+  .timeline .no { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--tb, var(--accent-soft)); color: var(--tc, var(--accent)); border: 2px solid var(--tc, var(--accent)); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .timeline b { display: block; font-size: 14.5px; line-height: 32px; }
+  .timeline span { font-size: 13px; color: var(--dim); display: block; }
+
+  /* 注釈付きコード */
+  .codenote { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 8px 0; font-family: ui-monospace, Consolas, monospace; font-size: 13px; overflow-x: auto; }
+  .codenote .cl { display: flex; align-items: center; gap: 10px; padding: 2px 12px; min-height: 26px; }
+  .codenote .cl.hl { background: var(--tb); box-shadow: inset 4px 0 0 var(--tc); }
+  .codenote .cc { white-space: pre; flex: 1; }
+  .codenote .ann { color: var(--tc, var(--accent)); font-weight: 700; }
+  .codenote .tag { flex: none; font-family: "Segoe UI", "Yu Gothic UI", system-ui, sans-serif; font-size: 11px; font-weight: 700; color: var(--tc); background: var(--panel); border: 1px solid var(--tc); border-radius: 999px; padding: 0 8px; white-space: nowrap; }
+
+  /* ステッパー（1 コマずつ進める図） */
+  .stepper { border: 2px solid var(--line); border-radius: 14px; background: var(--panel); padding: 14px; margin: 18px 0; }
+  .stepper .sc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .stepper .sc button { padding: 4px 12px; font-size: 13px; background: var(--code); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; }
+  .stepper .sc button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .stepper .sg { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .stepper .sn { display: flex; flex-direction: column; gap: 6px; }
+  .stepper .sn .node { border: 2px solid var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; background: var(--bg); transition: all .2s; }
+  .stepper .sn .node small { display: block; color: var(--dim); font-size: 11.5px; }
+  .stepper .sn .node.visited { border-color: var(--ok); }
+  .stepper .sn .node.visited::after { content: " ✓"; color: var(--ok); font-weight: 700; }
+  .stepper .sn .node.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .stepper .sn .node.active.stop { border-color: var(--err); background: var(--err-bg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 25%, transparent); }
+  .stepper .sn .node.active::after { content: ""; }
+  .stepper .sn .node.skipped { opacity: .35; }
+  .stepper .sp .count { font-size: 12px; color: var(--dim); }
+  .stepper .sp h4 { margin: 2px 0 8px; font-size: 16px; }
+  .stepper .sp .term { margin: 8px 0; min-height: 3em; }
+  .stepper .sp p { margin: 6px 0; font-size: 14px; }
+  .stepper .sb { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .stepper .sb button { padding: 6px 14px; font-size: 13px; }
+
+  @media (max-width: 640px) {
+    .flow.h { flex-direction: column; }
+    .flow.h .edge { flex: 0 0 auto; flex-direction: row; justify-content: center; padding: 4px 0; gap: 18px; min-height: 46px; }
+    .flow.h .arrow { flex-direction: row; gap: 8px; text-align: left; }
+    .flow.h .arrow .ln { width: 2px; height: 38px; }
+    .flow.h .arrow.f .ln::after { right: auto; top: auto; bottom: -2px; left: -5px; border: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--ink); }
+    .flow.h .arrow.b .ln::before { left: -5px; top: -2px; border: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 9px solid var(--ink); }
+    .flow.h .arrow.b { flex-direction: row; }
+    .hrow { grid-template-columns: 96px minmax(0, 1fr); }
+    .hrow .hn { grid-column: 1 / -1; border-top: 1px dashed var(--line); }
+    .compare { grid-template-columns: 1fr; }
+    .stepper .sg { grid-template-columns: 1fr; }
+    .stepper .sn { flex-direction: row; flex-wrap: wrap; }
+    .stepper .sn .node { flex: 1 1 40%; }
+    .layer { flex-direction: column; align-items: flex-start; gap: 2px; }
+  }
+
+  @media (max-width: 860px) {
+    .layout { display: block; }
+    nav.toc { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; }
+    .toc summary.toc-head { display: block; cursor: pointer; font-weight: 600; padding: 6px 0; }
+    .toc details:not([open]) .toc-body { display: none; }
+    main { padding: 16px 16px 60px; }
+    h2.ch-title { font-size: 21px; }
+    header.top .prog { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1><a href="#">計算 API で学ぶ REST API</a></h1>
+  <span class="prog" id="topProg"></span>
+  <button class="ghost" id="settingsBtn" type="button">設定</button>
+</header>
+<div id="devwarn"></div>
+
+<div class="layout">
+  <nav class="toc" aria-label="目次">
+    <details id="tocDetails" open>
+      <summary class="toc-head">目次を開く</summary>
+      <div class="toc-body" id="toc"></div>
+    </details>
+  </nav>
+  <main id="main"><div class="article" id="view"></div></main>
+</div>
+
+<dialog id="settings">
+  <h3 style="margin:0">設定</h3>
+  <label for="repoPath">リポジトリの場所（「VS Code で開く」に使う）</label>
+  <input type="text" id="repoPath" class="mono" spellcheck="false">
+  <p class="hint">例: <code>C:/git/springboot_API</code>。VS Code がインストールされている必要がある。</p>
+  <div class="row">
+    <button class="danger" id="resetBtn" type="button">進捗をリセット</button>
+    <span style="flex:1"></span>
+    <button class="ghost" id="settingsCancel" type="button">閉じる</button>
+    <button id="settingsSave" type="button">保存</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+// ===== 章ファイルから使う API ===========================================
+// code(path, anchor, desc) … リポジトリ内のファイルへのリンク。anchor はその行を探すための目印の文字列。
+//   章ファイルの中では必ず文字列リテラルで書く（LearningLinksTest が正規表現で拾って検査するため）。
+const GITHUB_BASE = "https://github.com/hiropon0216/springboot_API/blob/main/";
+const DEFAULT_REPO = "C:/git/springboot_API";
+const PASS_RATIO = 0.9;
+const QUIZ_SIZE = 10;
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function code(path, anchor, desc) {
+  const ref = { path, anchor, desc: desc || "" };
+  // 本文のテンプレート文字列に埋め込まれたときは、あとで描画する目印の要素になる
+  ref.toString = () =>
+    '<span class="ref" data-path="' + escapeHtml(path) + '" data-anchor="' + escapeHtml(anchor) +
+    '" data-desc="' + escapeHtml(desc || "") + '"></span>';
+  return ref;
+}
+
+// ===== 図の部品（章ファイルの本文で ${Fig.flow(...)} のように使う） ========
+// tone: "accent" | "ok" | "warn" | "err" | "lec" | "dim"。色はテーマの変数に揃える（ダークモードでも読める）。
+const Fig = {
+  _steppers: [],
+  _fig(inner, caption) {
+    return '<figure class="fig">' + inner + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
+  },
+  _t(tone) { return tone ? " t-" + tone : ""; },
+
+  /** 箱と矢印の流れ。nodes: [{ic, t, s, tone, active, faded}]、edges: ["ラベル" | {f:"行き", b:"帰り"}]、opts: {dir:"h"|"v", caption} */
+  flow(nodes, edges, opts) {
+    opts = opts || {};
+    let h = '<div class="flow ' + (opts.dir || "h") + (opts.compact ? " compact" : "") + '">';
+    nodes.forEach((n, i) => {
+      h += '<div class="node' + Fig._t(n.tone) + (n.active ? " active" : "") + (n.faded ? " faded" : "") + '">' +
+        (n.ic ? '<div class="ic" aria-hidden="true">' + n.ic + "</div>" : "") + "<b>" + n.t + "</b>" + (n.s ? "<span>" + n.s + "</span>" : "") + "</div>";
+      if (i < nodes.length - 1) {
+        const e = (edges || [])[i] || "";
+        const f = typeof e === "string" ? e : e.f;
+        const b = typeof e === "string" ? null : e.b;
+        h += '<div class="edge">' + (f != null ? '<div class="arrow f"><div class="ln"></div><div>' + f + "</div></div>" : "") +
+          (b ? '<div class="arrow b"><div class="ln"></div><div>' + b + "</div></div>" : "") + "</div>";
+      }
+    });
+    return Fig._fig(h + "</div>", opts.caption);
+  },
+
+  /** HTTP メッセージの図解。rows: [{k:"欄の名前", v:"中身", n:"説明", tone}] */
+  http(title, rows, caption) {
+    return Fig._fig('<div class="http"><div class="ht">' + title + "</div>" +
+      rows.map(r => '<div class="hrow' + Fig._t(r.tone) + '"><div class="hk">' + r.k + '</div><div class="hv">' + r.v + '</div><div class="hn">' + (r.n || "") + "</div></div>").join("") +
+      "</div>", caption);
+  },
+
+  /** カードの並び。items: [{ic, t, d, tone}] */
+  cards(items, caption) {
+    return Fig._fig('<div class="cards">' + items.map(c => '<div class="card' + Fig._t(c.tone) + '">' +
+      (c.ic ? '<div class="ic" aria-hidden="true">' + c.ic + "</div>" : "") + "<b>" + c.t + "</b><span>" + (c.d || "") + "</span></div>").join("") + "</div>", caption);
+  },
+
+  /** 2 つを並べて比べる。a / b: {t:"見出し", tone, html} */
+  compare(a, b, caption) {
+    const one = (x) => '<div class="cmp' + Fig._t(x.tone) + '"><div class="ch">' + x.t + '</div><div class="cb">' + x.html + "</div></div>";
+    return Fig._fig('<div class="compare">' + one(a) + one(b) + "</div>", caption);
+  },
+
+  /** 積み重ね（上から下へ）。layers: [{t, d, tone, h:高さ px}] */
+  stack(layers, caption) {
+    return Fig._fig('<div class="stack">' + layers.map(l => '<div class="layer' + Fig._t(l.tone) + '"' + (l.h ? ' style="min-height:' + l.h + 'px"' : "") +
+      "><b>" + l.t + "</b><span>" + (l.d || "") + "</span></div>").join("") + "</div>", caption);
+  },
+
+  /** 左右の対応。rows: [{l, r, tone, lnote, rnote}]（l / r を null にすると「無い」を点線で示す）、mid: 真ん中の記号 */
+  pairs(lt, rt, rows, caption, mid) {
+    let h = '<div class="pairs"><div class="ph">' + lt + '</div><div></div><div class="ph">' + rt + "</div>";
+    rows.forEach(r => {
+      const cell = (v, note) => v == null ? '<div class="pc empty">（無い）</div>' :
+        '<div class="pc' + Fig._t(r.tone) + '"><span>' + v + "</span>" + (note ? "<small>" + note + "</small>" : "") + "</div>";
+      h += cell(r.l, r.lnote) + '<div class="pm">' + (r.l == null || r.r == null ? "" : (mid || "⇄")) + "</div>" + cell(r.r, r.rnote);
+    });
+    return Fig._fig(h + "</div>", caption);
+  },
+
+  /** 色付きの表。cols: 見出し、rows: [{h:"行見出し", c:[{v, tone} | "文字"]}] */
+  matrix(corner, cols, rows, caption) {
+    let h = '<div class="matrix" style="grid-template-columns: minmax(110px, 1.3fr) repeat(' + cols.length + ', minmax(64px, 1fr))">' +
+      '<div class="mh mc0">' + (corner || "") + "</div>" + cols.map(c => '<div class="mh">' + c + "</div>").join("");
+    rows.forEach(r => {
+      h += '<div class="mr">' + r.h + "</div>" + r.c.map(c => typeof c === "string" ? "<div>" + c + "</div>" :
+        '<div class="' + Fig._t(c.tone).trim() + '">' + c.v + "</div>").join("");
+    });
+    return Fig._fig(h + "</div>", caption);
+  },
+
+  /** ターミナル風のログ。lines: 文字列の配列（"$ " で始まる行はコマンド、[n/5 …] は色分け） */
+  term(lines, caption) {
+    const fmt = (l) => {
+      if (l.startsWith("$ ")) return '<span class="cmd">' + escapeHtml(l.slice(2)) + "</span>";
+      const m = l.match(/^\[(\d)\/5 [^\]]+\]/);
+      if (m) return '<span class="p' + m[1] + '">' + escapeHtml(m[0]) + "</span>" + escapeHtml(l.slice(m[0].length));
+      if (/^\s*(insert|select|update|delete|Hibernate)/i.test(l)) return '<span class="sql">' + escapeHtml(l) + "</span>";
+      return escapeHtml(l);
+    };
+    return Fig._fig('<div class="term">' + lines.map(fmt).join("\n") + "</div>", caption);
+  },
+
+  /** 番号付きの手順。steps: [{t, d, tone}] */
+  timeline(steps, caption) {
+    return Fig._fig('<ol class="timeline">' + steps.map((s, i) => '<li class="' + Fig._t(s.tone).trim() + '"><span class="no">' + (s.no || i + 1) + "</span><b>" + s.t + "</b>" +
+      (s.d ? "<span>" + s.d + "</span>" : "") + "</li>").join("") + "</ol>", caption);
+  },
+
+  /** 注釈付きのコード。lines: [{c:"コード", tag:"注釈", tone}]。@ で始まる語は色付けする */
+  code(lines, caption) {
+    return Fig._fig('<div class="codenote">' + lines.map(l => {
+      const c = escapeHtml(l.c).replace(/(@[A-Za-z]+)/g, '<span class="ann">$1</span>');
+      return '<div class="cl' + (l.tone ? " hl" : "") + Fig._t(l.tone) + '"><span class="cc">' + (c || " ") + "</span>" +
+        (l.tag ? '<span class="tag">' + l.tag + "</span>" : "") + "</div>";
+    }).join("") + "</div>", caption);
+  },
+
+  /** 1 コマずつ進める図。cfg: {nodes:[{id, t, s}], scenarios:[{name, steps:[{node, t, log:[…], d, stop}]}]} */
+  stepper(cfg) {
+    const ids = new Set(cfg.nodes.map(n => n.id));
+    cfg.scenarios.forEach(s => s.steps.forEach((st, i) => {
+      if (!ids.has(st.node)) Calc.problems.push("ステッパー「" + s.name + "」の " + (i + 1) + " コマ目: node " + st.node + " が無い");
+    }));
+    Fig._steppers.push(cfg);
+    return '<div class="stepper" data-sid="' + (Fig._steppers.length - 1) + '"></div>';
+  }
+};
+
+function hydrateSteppers(root) {
+  root.querySelectorAll(".stepper[data-sid]").forEach(el => {
+    const cfg = Fig._steppers[Number(el.dataset.sid)];
+    el.removeAttribute("data-sid");
+    let sc = 0, k = 0;
+    const draw = () => {
+      const scen = cfg.scenarios[sc];
+      const step = scen.steps[k];
+      const visited = new Set(scen.steps.slice(0, k).map(s => s.node));
+      const willVisit = new Set(scen.steps.map(s => s.node));
+      el.innerHTML =
+        (cfg.scenarios.length > 1 ? '<div class="sc" role="group" aria-label="シナリオ">' + cfg.scenarios.map((s, i) =>
+          '<button type="button" data-sc="' + i + '" aria-pressed="' + (i === sc) + '">' + s.name + "</button>").join("") + "</div>" : "") +
+        '<div class="sg"><div class="sn">' + cfg.nodes.map(n => {
+          const cls = n.id === step.node ? "active" + (step.stop ? " stop" : "") : visited.has(n.id) ? "visited" : willVisit.has(n.id) ? "" : "skipped";
+          return '<div class="node ' + cls + '">' + n.t + (n.s ? "<small>" + n.s + "</small>" : "") + "</div>";
+        }).join("") + "</div>" +
+        '<div class="sp"><div class="count">' + (k + 1) + " / " + scen.steps.length + "</div><h4>" + step.t + "</h4>" +
+        (step.log && step.log.length ? Fig.term(step.log) : "") + (step.d ? "<p>" + step.d + "</p>" : "") +
+        '<div class="sb"><button type="button" class="ghost" data-go="-1"' + (k === 0 ? " disabled" : "") + ">◀ 前へ</button>" +
+        '<button type="button" data-go="1"' + (k === scen.steps.length - 1 ? " disabled" : "") + ">次へ ▶</button>" +
+        '<button type="button" class="ghost" data-go="0">最初から</button></div></div></div>';
+      el.querySelectorAll("[data-sc]").forEach(b => b.addEventListener("click", () => { sc = Number(b.dataset.sc); k = 0; draw(); }));
+      el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+        const g = Number(b.dataset.go);
+        k = g === 0 ? 0 : Math.min(Math.max(k + g, 0), scen.steps.length - 1);
+        draw();
+      }));
+    };
+    draw();
+  });
+}
+
+const Calc = {
+  chapters: {},
+  problems: [],
+  register(ch) {
+    validateChapter(ch);
+    Calc.chapters[ch.no] = ch;
+  }
+};
+
+function validateChapter(ch) {
+  const where = "第 " + ch.no + " 章";
+  const p = (msg) => Calc.problems.push(where + ": " + msg);
+  if (!ch.goal || !ch.sections || !ch.questions) p("goal / sections / questions のどれかが無い");
+  const ids = new Set((ch.sections || []).map(s => s.id));
+  (ch.sections || []).forEach(s => { if (!s.id || !s.title || !s.body) p("節に id / title / body が無い: " + (s.title || s.id)); });
+  if ((ch.questions || []).length < 15) p("問題が " + (ch.questions || []).length + " 問しかない（15 問以上）");
+  (ch.questions || []).forEach((q, i) => {
+    if (!q.q || !Array.isArray(q.choices) || q.choices.length !== 4) p("Q" + (i + 1) + ": 選択肢は 4 つ");
+    else if (new Set(q.choices).size !== 4) p("Q" + (i + 1) + ": 選択肢が重複している");
+    if (!q.explain) p("Q" + (i + 1) + ": 解説が無い");
+    if (q.see && !ids.has(q.see)) p("Q" + (i + 1) + ": see の節 " + q.see + " が無い");
+  });
+}
+
+// ===== 進捗の保存（localStorage が使えなくても動く） ======================
+const STORE_KEY = "calcLearning.v1";
+let state = { passed: {}, best: {}, repo: DEFAULT_REPO };
+try {
+  const raw = localStorage.getItem(STORE_KEY);
+  if (raw) state = Object.assign(state, JSON.parse(raw));
+} catch (e) {}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+// ===== 章の状態 =========================================================
+function outlineChapters() { return window.CALC_OUTLINE.filter(o => o.no); }
+function status(no) {
+  if (!Calc.chapters[no]) return "draft";
+  if (state.passed[no]) return "passed";
+  if (no === 1 || state.passed[no - 1]) return "open";
+  return "locked";
+}
+const ST_ICON = { passed: "✓", open: "▶", locked: "🔒", draft: "—" };
+const ST_TEXT = { passed: "合格", open: "学習中", locked: "未解放", draft: "準備中" };
+const KIND_TEXT = { impl: "実装", lecture: "座学", mixed: "実装＋座学", summary: "まとめ" };
+
+// ===== コードへのリンクを描画 ==========================================
+function refUrls(path, anchor) {
+  const line = (window.CALC_ANCHORS || {})[path + "#" + anchor];
+  const repo = (state.repo || DEFAULT_REPO).replace(/\\/g, "/").replace(/\/+$/, "");
+  const vscode = "vscode://file/" + encodeURI(repo + "/" + path) + (line ? ":" + line : "");
+  const plain = /\.(md|ya?ml|html)$/i.test(path) ? "?plain=1" : "";
+  const github = GITHUB_BASE + encodeURI(path) + plain + (line ? "#L" + line : "");
+  return { line, vscode, github };
+}
+function refInner(path, anchor, desc) {
+  const { line, vscode, github } = refUrls(path, anchor);
+  const file = path.split("/").pop();
+  return '<span class="file" title="' + escapeHtml(path) + '">' + escapeHtml(file) + (line ? ":" + line : "") + "</span>" +
+    '<span class="anchor">「' + escapeHtml(anchor) + "」</span>" +
+    '<a class="open" href="' + vscode + '">VS Code で開く</a>' +
+    '<a class="open" href="' + github + '" target="_blank" rel="noopener">GitHub で見る</a>' +
+    (line ? "" : '<span class="broken">（行番号が未登録）</span>') +
+    (desc ? '<span class="desc">' + desc + "</span>" : "");
+}
+function hydrateRefs(root) {
+  root.querySelectorAll(".ref[data-path]").forEach(el => {
+    el.innerHTML = refInner(el.dataset.path, el.dataset.anchor, el.dataset.desc);
+    el.removeAttribute("data-path");
+  });
+}
+function refsBlock(refs, label) {
+  if (!refs || !refs.length) return "";
+  return '<div class="refs"><div class="label">' + (label || "実物を開く") + "</div>" + refs.map(String).join("") + "</div>";
+}
+
+// ===== 画面 =============================================================
+const $ = (id) => document.getElementById(id);
+const view = $("view");
+let quiz = null; // 受験中のテスト
+
+function renderToc(currentNo) {
+  let html = "";
+  window.CALC_OUTLINE.forEach(o => {
+    if (o.part) { html += '<div class="part">第 ' + o.part + " 部　" + escapeHtml(o.partTitle) + "</div>"; return; }
+    const st = status(o.no);
+    const best = state.best[o.no] != null ? " title=\"最高 " + state.best[o.no] + " 点\"" : "";
+    html += '<a class="ch ' + st + (o.no === currentNo ? " current" : "") + '" href="#ch/' + o.no + '"' + best + ">" +
+      '<span class="st st-' + st + '" aria-label="' + ST_TEXT[st] + '">' + ST_ICON[st] + "</span>" +
+      "<span>" + o.no + ". " + escapeHtml(o.title) + "</span></a>";
+  });
+  $("toc").innerHTML = html;
+  const written = outlineChapters().filter(o => Calc.chapters[o.no]).length;
+  const passed = outlineChapters().filter(o => state.passed[o.no]).length;
+  $("topProg").textContent = "合格 " + passed + " / 公開 " + written + " / 全 " + outlineChapters().length + " 章";
+}
+
+function meta(no) { return outlineChapters().find(o => o.no === no); }
+function partOf(no) {
+  let part = null;
+  for (const o of window.CALC_OUTLINE) { if (o.part) part = o; if (o.no === no) return part; }
+  return null;
+}
+
+function renderHome() {
+  const all = outlineChapters();
+  const passed = all.filter(o => state.passed[o.no]).length;
+  const next = all.find(o => status(o.no) === "open");
+  view.innerHTML =
+    '<div class="hero"><h2>計算 API で学ぶ<br>REST API の設計と AI 駆動開発</h2>' +
+    "<p>このリポジトリの実物（四則演算と、その履歴を DB に残す API）を教材に、REST API の設計の大局を学ぶ教科書と問題集。" +
+    "IT の前提知識ゼロから読めるように書いている。</p></div>" +
+    '<div class="steps">' +
+    "<div><b>1. 読む</b>章の本文を読む。全体の中での位置から入る。</div>" +
+    "<div><b>2. 実物を開く</b>リンクからコードを開き、「確認すること」を自分の目で確かめる。</div>" +
+    "<div><b>3. 動かす</b>アプリを起動して、書いてある通りになるか観察する。</div>" +
+    "<div><b>4. 解く</b>章末の 4 択 10 問。9 問以上で次の章が開く。</div></div>" +
+    "<h3>進捗</h3><div>合格 " + passed + " / 全 " + all.length + " 章</div>" +
+    '<div class="bar"><div style="width:' + (passed / all.length * 100) + '%"></div></div>' +
+    (next ? '<p><button type="button" onclick="location.hash=\'#ch/' + next.no + '\'">続きから：第 ' + next.no + " 章 " + escapeHtml(next.title) + "</button></p>" :
+      "<p>公開済みの章はすべて合格した。</p>") +
+    '<div class="note"><b>はじめに</b><br>' +
+    "・「VS Code で開く」は VS Code が必要。リポジトリの場所が違う場合は右上の「設定」で変える。<br>" +
+    "・「動かして観察」ではアプリを起動する（<code>./mvnw spring-boot:run</code>、Docker が必要）。" +
+    "ワークスペース直下の <code>api-console.html</code> を Live Server で開くと、画面から API を叩ける。<br>" +
+    "・進捗はこのブラウザに保存される（別のブラウザや端末とは共有されない）。</div>";
+}
+
+function renderLocked(no) {
+  const st = status(no);
+  const m = meta(no);
+  view.innerHTML = '<div class="locked-view"><div class="big">' + (st === "draft" ? "📝" : "🔒") + "</div>" +
+    "<h2>第 " + no + " 章 " + escapeHtml(m ? m.title : "") + "</h2>" +
+    (st === "draft" ? "<p>この章はまだ準備中。</p>" :
+      "<p>第 " + (no - 1) + " 章の章末テストで 10 問中 9 問以上正解すると開く。</p>" +
+      '<p><button type="button" onclick="location.hash=\'#ch/' + (no - 1) + '\'">第 ' + (no - 1) + " 章へ</button></p>") + "</div>";
+}
+
+function renderChapter(no) {
+  const ch = Calc.chapters[no];
+  const m = meta(no);
+  const part = partOf(no);
+  let html = '<div class="crumb">第 ' + part.part + " 部　" + escapeHtml(part.partTitle) + "</div>" +
+    '<h2 class="ch-title">第 ' + no + " 章　" + escapeHtml(m.title) +
+    '<span class="badge ' + m.kind + '">' + KIND_TEXT[m.kind] + "</span></h2>";
+  if (state.passed[no]) html += '<div class="crumb" style="color:var(--ok)">✓ 合格済み' +
+    (state.best[no] != null ? "（最高 " + state.best[no] + " 点）" : "") + "。いつでも解き直せる。</div>";
+  html += '<div class="goal"><b>この章のゴール</b><ul>' + ch.goal.map(g => "<li>" + g + "</li>").join("") + "</ul></div>";
+  ch.sections.forEach((s, i) => {
+    html += '<section class="sec" id="ch' + no + "-" + s.id + '"><h3>' + no + "." + (i + 1) + "　" + escapeHtml(s.title) + "</h3>" +
+      s.body + refsBlock(s.refs);
+    if (s.checks && s.checks.length) {
+      html += '<div class="checks"><div class="label">確認すること（実物を開いて答えてから、答えを開く）</div>' +
+        s.checks.map(c => "<details><summary>" + c.q + "</summary><div>" + c.a + "</div></details>").join("") + "</div>";
+    }
+    html += "</section>";
+  });
+  if (ch.observe) {
+    html += '<div class="box"><h3>動かして観察</h3>' + (ch.observe.intro || "") + "<ol>" +
+      ch.observe.steps.map(st => "<li>" + st.do + (st.expect ? '<div class="expect">期待する結果: ' + st.expect + "</div>" : "") + "</li>").join("") +
+      "</ol></div>";
+  }
+  if (ch.ai) html += '<div class="box ai"><h3>AI 駆動開発の観点</h3>' + ch.ai + "</div>";
+  const need = Math.ceil(Math.min(QUIZ_SIZE, ch.questions.length) * PASS_RATIO);
+  html += '<div class="quiz-cta"><p>章末テスト：' + ch.questions.length + " 問のプールから " + Math.min(QUIZ_SIZE, ch.questions.length) +
+    " 問を出題。" + need + " 問以上で合格" + (Calc.chapters[no + 1] ? "し、次の章が開く" : "") + "。</p>" +
+    '<button type="button" onclick="location.hash=\'#ch/' + no + '/quiz\'">章末テストを受ける</button></div>';
+  view.innerHTML = html;
+  hydrateRefs(view);
+  hydrateSteppers(view);
+}
+
+// ===== 章末テスト =======================================================
+function shuffle(a) {
+  const b = a.slice();
+  for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
+  return b;
+}
+function startQuiz(no) {
+  const ch = Calc.chapters[no];
+  const picked = shuffle(ch.questions).slice(0, QUIZ_SIZE);
+  quiz = {
+    no,
+    items: picked.map(q => ({
+      q: q.q, explain: q.explain, see: q.see, refs: q.refs,
+      // 章ファイルでは choices[0] が正解。表示順はここで混ぜる
+      choices: shuffle(q.choices.map((text, i) => ({ text, correct: i === 0 })))
+    })),
+    answers: new Array(picked.length).fill(null),
+    submitted: false
+  };
+}
+function renderQuiz(no) {
+  if (!quiz || quiz.no !== no) startQuiz(no);
+  const ch = Calc.chapters[no];
+  const m = meta(no);
+  const need = Math.ceil(quiz.items.length * PASS_RATIO);
+  const score = quiz.items.filter((it, i) => quiz.answers[i] != null && it.choices[quiz.answers[i]].correct).length;
+  let html = '<div class="crumb"><a href="#ch/' + no + '">← 第 ' + no + " 章 " + escapeHtml(m.title) + " に戻る</a></div>" +
+    '<h2 class="ch-title">章末テスト</h2>';
+  if (quiz.submitted) {
+    const pass = score >= need;
+    html += '<div class="result ' + (pass ? "pass" : "fail") + '"><div class="score">' + score + " / " + quiz.items.length + "</div>" +
+      "<div>" + (pass ? "合格！" + (Calc.chapters[no + 1] ? "第 " + (no + 1) + " 章が開いた。" : "") :
+        "不合格（" + need + " 問以上で合格）。解説と本文を見直して、もう一度。") + "</div>" +
+      '<div class="actions"><button type="button" id="retry" class="ghost">新しい 10 問で解き直す</button>' +
+      '<button type="button" class="ghost" onclick="location.hash=\'#ch/' + no + '\'">本文に戻る</button>' +
+      (pass && Calc.chapters[no + 1] ? '<button type="button" onclick="location.hash=\'#ch/' + (no + 1) + '\'">第 ' + (no + 1) + " 章へ進む</button>" : "") +
+      "</div></div>";
+  } else {
+    html += '<p style="color:var(--dim)">' + quiz.items.length + " 問すべてに答えてから採点する。" + need + " 問以上で合格。</p>";
+  }
+  quiz.items.forEach((it, i) => {
+    const ans = quiz.answers[i];
+    html += '<div class="q' + (quiz.submitted ? " done" : "") + '"><div class="qtext"><span class="qno">Q' + (i + 1) + ".</span>" + it.q + "</div>";
+    it.choices.forEach((c, j) => {
+      let cls = "";
+      if (quiz.submitted) cls = c.correct ? "correct" : (ans === j ? "wrong" : "");
+      html += '<label class="' + cls + '"><input type="radio" name="q' + i + '" value="' + j + '"' +
+        (ans === j ? " checked" : "") + (quiz.submitted ? " disabled" : "") + "><span>" + c.text + "</span></label>";
+    });
+    if (quiz.submitted) {
+      const ok = ans != null && it.choices[ans].correct;
+      const sec = it.see ? ch.sections.findIndex(s => s.id === it.see) : -1;
+      html += '<div class="explain"><span class="verdict ' + (ok ? "ok" : "ng") + '">' + (ok ? "正解" : "不正解") + "</span>　" + it.explain +
+        (sec >= 0 ? '<div style="margin-top:6px">本文で確認: <a href="#ch/' + no + "/" + it.see + '">' + no + "." + (sec + 1) + " " +
+          escapeHtml(ch.sections[sec].title) + "</a></div>" : "") +
+        (it.refs && it.refs.length ? '<div style="margin-top:4px">' + it.refs.map(String).join("<br>") + "</div>" : "") + "</div>";
+    }
+    html += "</div>";
+  });
+  if (!quiz.submitted) {
+    const answered = quiz.answers.filter(a => a != null).length;
+    html += '<div class="sticky-submit"><button type="button" id="submitQuiz"' + (answered < quiz.items.length ? " disabled" : "") + ">採点する（" +
+      answered + " / " + quiz.items.length + " 問回答済み）</button></div>";
+  }
+  view.innerHTML = html;
+  hydrateRefs(view);
+
+  view.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener("change", () => {
+    quiz.answers[Number(r.name.slice(1))] = Number(r.value);
+    const answered = quiz.answers.filter(a => a != null).length;
+    const btn = $("submitQuiz");
+    btn.disabled = answered < quiz.items.length;
+    btn.textContent = "採点する（" + answered + " / " + quiz.items.length + " 問回答済み）";
+  }));
+  const submit = $("submitQuiz");
+  if (submit) submit.addEventListener("click", () => {
+    quiz.submitted = true;
+    const s = quiz.items.filter((it, i) => it.choices[quiz.answers[i]].correct).length;
+    state.best[no] = Math.max(state.best[no] || 0, s);
+    if (s >= need) state.passed[no] = true;
+    save();
+    renderToc(no);
+    renderQuiz(no);
+    window.scrollTo(0, 0);
+  });
+  const retry = $("retry");
+  if (retry) retry.addEventListener("click", () => { quiz = null; renderQuiz(no); window.scrollTo(0, 0); });
+}
+
+// ===== ルーティング（#ch/3 / #ch/3/s2 / #ch/3/quiz） =====================
+function route() {
+  const m = location.hash.match(/^#ch\/(\d+)(?:\/(\w+))?$/);
+  const no = m ? Number(m[1]) : null;
+  renderToc(no);
+  if (!no) { renderHome(); window.scrollTo(0, 0); return; }
+  if (!meta(no) || status(no) === "locked" || status(no) === "draft") { renderLocked(no); window.scrollTo(0, 0); return; }
+  if (m[2] === "quiz") { renderQuiz(no); window.scrollTo(0, 0); }
+  else {
+    if (quiz && quiz.no === no && quiz.submitted) quiz = null;
+    renderChapter(no);
+    const target = m[2] ? document.getElementById("ch" + no + "-" + m[2]) : null;
+    if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
+  }
+  if (window.matchMedia("(max-width: 860px)").matches) $("tocDetails").open = false;
+}
+
+// ===== 設定 =============================================================
+$("settingsBtn").addEventListener("click", () => { $("repoPath").value = state.repo || DEFAULT_REPO; $("settings").showModal(); });
+$("settingsCancel").addEventListener("click", () => $("settings").close());
+$("settingsSave").addEventListener("click", () => {
+  state.repo = $("repoPath").value.trim() || DEFAULT_REPO;
+  save(); $("settings").close(); route();
+});
+$("resetBtn").addEventListener("click", () => {
+  if (!confirm("すべての章の合格記録と最高点を消す。よい？")) return;
+  state.passed = {}; state.best = {}; quiz = null;
+  save(); $("settings").close(); location.hash = ""; route();
+});
+</script>
+
+<script src="chapters/outline.js"></script>
+<script src="chapters/anchors.js"></script>
+<script src="chapters/ch01.js"></script>
+<script src="chapters/ch02.js"></script>
+<script src="chapters/ch03.js"></script>
+<script src="chapters/ch04.js"></script>
+
+<script>
+if (Calc.problems.length) {
+  $("devwarn").innerHTML = '<div class="devwarn"><b>章データに問題がある（作者向け）</b><ul>' +
+    Calc.problems.map(p => "<li>" + escapeHtml(p) + "</li>").join("") + "</ul></div>";
+}
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>

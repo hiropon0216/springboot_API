@@ -54,6 +54,9 @@ Claude が planner / generator / evaluator を会話の中で果たす。詳細�
 - [x] **Sprint 7: REST API としての仕上げ** — [docs/spec.md](docs/spec.md) §6 / [ADR 0008](docs/adr/0008-rest-api-finishing.md)
   - 一覧のページング、PATCH を JSON Merge Patch に、結果の桁あふれを 422 に、500 も ProblemDetail に
   - `./mvnw verify` グリーン（61 tests）。実 HTTP は H2 で確認（PostgreSQL では未確認）
+- [x] **Sprint 8: 学習アプリの骨格 ＋ 第 1 部** — [ADR 0009](docs/adr/0009-learning-app.md)
+  - [docs/learning/index.html](docs/learning/index.html) をブラウザで開く（教科書 ＆ 問題集。1〜4 章、全 26 章の予定）
+  - `./mvnw verify` グリーン（64 tests。教材のリンク切れも検査する）
 
 ## 開発環境
 
@@ -157,10 +160,11 @@ Render のデプロイフックを呼ぶ（`RENDER_DEPLOY_HOOK_URL` を GitHub S
 |---|---|
 | `docs/brainstorm.md` | 設計合意（末尾に計算 API 化・DB 連携の変更記録）|
 | `docs/spec.md` | 現行仕様・データモデル・受け入れ基準・Sprint 6〜7 |
-| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ）|
+| `docs/adr/` | 軽量 ADR（`0001` 進め方 / `0002` 言語・FW / `0004` package-by-feature / `0006` 題材変更 / `0007` Model と DB / `0008` REST の仕上げ / `0009` 学習アプリ）|
 | `docs/progress.md` | 実装進捗・検証結果・引き渡し事項 |
-| `docs/learning/textbook.md` | **解説書**（IT 初心者向け・全 12 章 + 用語集）|
-| `docs/learning/curriculum.md` | **学習カリキュラム**（進め方。全 11 モジュール）|
+| `docs/learning/index.html` | **教科書 ＆ 問題集アプリ**（ブラウザで開く。章末 4 択で 9 割以上なら次の章へ。作成中）|
+| `docs/learning/textbook.md` | 旧解説書（Sprint 5 時点で古い。学習アプリが揃ったら削除）|
+| `docs/learning/curriculum.md` | 旧カリキュラム（同上）|
 | `docs/learning/sprint-6.md` | Sprint 6 の学習ノート（Model / DB / REST の要点と復習問）|
 | `docs/learning/sprint-7.md` | Sprint 7 の学習ノート（ページング / Merge Patch / 500 / 桁あふれ）|
 
